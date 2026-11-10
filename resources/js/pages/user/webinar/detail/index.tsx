@@ -69,7 +69,7 @@ export default function Webinar({
     myWebinarIds: string[];
     referralInfo: ReferralInfo;
 }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const [activeTab, setActiveTab] = useState('benefits');
 
     useEffect(() => {

@@ -30,7 +30,7 @@ interface WebinarProps {
 }
 
 export default function Webinar({ categories, webinars, myWebinarIds }: WebinarProps) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
 
     return (
         <div className="relative min-h-screen bg-background">

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 export default function AboutSection() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
 
     return (
         <section className="mx-auto w-full max-w-7xl px-4">

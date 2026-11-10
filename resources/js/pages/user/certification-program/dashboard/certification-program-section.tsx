@@ -40,7 +40,7 @@ interface CertificationProgramSectionProps {
 }
 
 export default function CertificationProgramSection({ categories, programs, myProgramIds, approvedScholarshipProgramIds = [] }: CertificationProgramSectionProps) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : id;
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [search, setSearch] = useState('');

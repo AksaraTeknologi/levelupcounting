@@ -157,7 +157,10 @@ class PaymentSettlementService
                 $lockedInvoice->discountUsage->delete();
             }
 
-            $lockedInvoice->update(['status' => 'failed']);
+            $lockedInvoice->update([
+                'status' => 'failed',
+                'paid_at' => null,
+            ]);
 
             Log::info('Payment marked as failed', [
                 'invoice_code' => $lockedInvoice->invoice_code,
@@ -170,6 +173,150 @@ class PaymentSettlementService
 
             return true;
         });
+    }
+
+    /**
+     * Handle a refunded transaction safely according to its current status.
+     * - If pending: marks as failed and refunds redeemed points / discount quota.
+     * - If paid: revokes product access, cleans up certificate participants and affiliate/mentor commissions,
+     *   refunds redeemed points / discount quota, and marks the invoice as failed.
+     */
+    public function refund(Invoice $invoice, array $refundData = []): bool
+    {
+        return DB::transaction(function () use ($invoice, $refundData) {
+            /** @var Invoice|null $lockedInvoice */
+            $lockedInvoice = Invoice::with([
+                'courseItems',
+                'bootcampItems',
+                'webinarItems',
+                'certificationProgramItems',
+                'bundleEnrollments.bundle.bundleItems',
+                'discountUsage.discountCode',
+            ])->where('id', $invoice->id)->lockForUpdate()->first();
+
+            if (!$lockedInvoice) {
+                return false;
+            }
+
+            if ($lockedInvoice->status === 'failed') {
+                return true;
+            }
+
+            if ($lockedInvoice->status === 'pending') {
+                return $this->fail($lockedInvoice, 'Payment refunded while pending', 'REFUND');
+            }
+
+            // Jika sebelumnya sudah PAID, cabut hak akses, sertifikat, dan komisi affiliate/mentor
+            $userId = $lockedInvoice->user_id;
+
+            foreach ($lockedInvoice->courseItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('course', $item->course_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->bootcampItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('bootcamp', $item->bootcamp_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->webinarItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('webinar', $item->webinar_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->certificationProgramItems as $item) {
+                $item->update(['completed_at' => null]);
+            }
+
+            foreach ($lockedInvoice->bundleEnrollments as $enrollment) {
+                $enrollment->update(['completed_at' => null]);
+                $bundle = $enrollment->bundle;
+                if ($bundle && $bundle->bundleItems) {
+                    foreach ($bundle->bundleItems as $bundleItem) {
+                        $this->revokeCertificateParticipantIfNoOtherPaid($bundleItem->getTypeSlug(), $bundleItem->bundleable_id, $userId, $lockedInvoice->id);
+                    }
+                }
+            }
+
+            if ($lockedInvoice->isInstallmentChild() && $lockedInvoice->parent_invoice_id) {
+                $parentInvoice = Invoice::find($lockedInvoice->parent_invoice_id);
+                if ($parentInvoice) {
+                    $parentInvoice->update([
+                        'status' => 'installment_pending',
+                        'access_suspended_at' => Carbon::now('Asia/Jakarta'),
+                    ]);
+                }
+            }
+
+            AffiliateEarning::where('invoice_id', $lockedInvoice->id)->delete();
+
+            if ($lockedInvoice->points_redeemed > 0) {
+                try {
+                    app(PointService::class)->refundPoints($lockedInvoice);
+                } catch (\Throwable $e) {
+                    Log::error('Gagal refund poin saat REFUND untuk invoice: ' . $lockedInvoice->invoice_code, ['error' => $e->getMessage()]);
+                }
+            }
+
+            if ($lockedInvoice->discountUsage) {
+                $discountCode = $lockedInvoice->discountUsage->discountCode;
+                if ($discountCode) {
+                    $discountCode->decrement('used_count');
+                }
+                $lockedInvoice->discountUsage->delete();
+            }
+
+            $lockedInvoice->update([
+                'status' => 'failed',
+                'paid_at' => null,
+            ]);
+
+            Log::warning('Payment refund processed and access revoked', [
+                'invoice_code' => $lockedInvoice->invoice_code,
+                'reference' => $refundData['reference'] ?? $lockedInvoice->payment_reference,
+                'note' => $refundData['note'] ?? null,
+            ]);
+
+            return true;
+        });
+    }
+
+    protected function revokeCertificateParticipantIfNoOtherPaid(string $type, $itemId, $userId, string $excludeInvoiceId): void
+    {
+        $certificate = match ($type) {
+            'course' => Certificate::where('course_id', $itemId)->first(),
+            'bootcamp' => Certificate::where('bootcamp_id', $itemId)->first(),
+            'webinar' => Certificate::where('webinar_id', $itemId)->first(),
+            default => null,
+        };
+
+        if (!$certificate) {
+            return;
+        }
+
+        $relation = match ($type) {
+            'course' => ['courseItems', 'course_id'],
+            'bootcamp' => ['bootcampItems', 'bootcamp_id'],
+            'webinar' => ['webinarItems', 'webinar_id'],
+            default => null,
+        };
+
+        if (!$relation) {
+            return;
+        }
+
+        [$relName, $fieldName] = $relation;
+        $hasOtherPaid = Invoice::where('user_id', $userId)
+            ->where('id', '!=', $excludeInvoiceId)
+            ->where('status', 'paid')
+            ->whereHas($relName, fn($q) => $q->where($fieldName, $itemId))
+            ->exists();
+
+        if (!$hasOtherPaid) {
+            CertificateParticipant::where('certificate_id', $certificate->id)
+                ->where('user_id', $userId)
+                ->delete();
+        }
     }
 
     /**
@@ -300,13 +447,7 @@ class PaymentSettlementService
      */
     public function activateInstallmentEnrollments(Invoice $parentInvoice): void
     {
-        if ($parentInvoice->bundleEnrollments && $parentInvoice->bundleEnrollments->count() > 0) {
-            foreach ($parentInvoice->bundleEnrollments as $bundleEnrollment) {
-                if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
-                    $bundleEnrollment->createIndividualEnrollments();
-                }
-            }
-        }
+        $this->processInvoiceEnrollments($parentInvoice);
 
         Log::info('Installment DP paid - access activated', [
             'parent_invoice_code' => $parentInvoice->invoice_code,

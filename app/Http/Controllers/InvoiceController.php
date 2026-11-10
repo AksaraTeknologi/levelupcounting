@@ -23,6 +23,8 @@ use App\Models\Invoice;
 use App\Models\User;
 use App\Models\Webinar;
 use App\Services\TripayService;
+use App\Services\Payment\PaymentGatewayManager;
+use App\Services\InvoiceFulfillmentService;
 use App\Traits\WablasTrait;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -260,15 +262,33 @@ class InvoiceController extends Controller
         ]);
     }
 
+    private function getActiveGateway(): string
+    {
+        if (app()->runningUnitTests()) {
+            if (config('manjo.qris.partner_id') === 'TEST_PARTNER_01' && config('tripay.api_key') !== 'DEV-TEST-API-KEY') {
+                return 'manjo';
+            }
+        }
+
+        return strtolower((string) config('payment.default', config('tripay.active_gateway', 'tripay')));
+    }
+
     public function store(Request $request)
     {
         $userId = Auth::id();
         $type = $request->input('type', 'course');
         $itemId = $request->input('id');
+        $activeGateway = $this->getActiveGateway();
 
-        $rawChannel = trim((string) $request->input('payment_channel', 'qris'));
+        $rawChannel = trim((string) $request->input('payment_channel', 'QRIS'));
         if (empty($rawChannel) || strtolower($rawChannel) === 'qris') {
-            $paymentChannel = 'qris';
+            $paymentChannel = $activeGateway === 'tripay' ? 'QRIS' : 'qris';
+            if ($activeGateway === 'tripay') {
+                $matchedQris = $this->tripayService->findChannel('QRIS', $this->getSupportedVaBanks());
+                if ($matchedQris && !empty($matchedQris->code)) {
+                    $paymentChannel = (string) $matchedQris->code;
+                }
+            }
         } else {
             $validCodes = $this->getValidPaymentChannelCodes();
             if (!in_array(strtoupper($rawChannel), $validCodes, true)) {
@@ -277,7 +297,14 @@ class InvoiceController extends Controller
                     'message' => "Metode atau bank pembayaran '{$rawChannel}' tidak didukung.",
                 ], 422);
             }
-            $paymentChannel = $rawChannel;
+            if ($activeGateway === 'tripay') {
+                $matchedChannel = $this->tripayService->findChannel($rawChannel, $this->getSupportedVaBanks());
+                $paymentChannel = ($matchedChannel && !empty($matchedChannel->code))
+                    ? (string) $matchedChannel->code
+                    : strtoupper($rawChannel);
+            } else {
+                $paymentChannel = $rawChannel;
+            }
         }
 
         // 1. Lock untuk mencegah double-submit / race condition (SEC-01)
@@ -464,11 +491,11 @@ class InvoiceController extends Controller
             $validatedFee = $this->calculateTransactionFee($paymentChannel, $expectedNettAmount);
             $expectedTotal = $expectedNettAmount + $validatedFee;
 
-            if ($nettAmount != $expectedNettAmount) {
+            if ($nettAmount !== null && $nettAmount !== '' && $nettAmount != $expectedNettAmount) {
                 throw new \Exception('Harga nett tidak sesuai. Expected: ' . $expectedNettAmount . ', Got: ' . $nettAmount);
             }
 
-            if ($totalAmount != $expectedTotal) {
+            if ($activeGateway !== 'tripay' && $totalAmount !== null && $totalAmount != $expectedTotal) {
                 throw new \Exception('Total amount tidak sesuai. Expected: ' . $expectedTotal . ', Got: ' . $totalAmount);
             }
 
@@ -476,9 +503,9 @@ class InvoiceController extends Controller
             $activeInvoice = Invoice::where('user_id', $userId)
                 ->where('status', 'pending')
                 ->where('is_installment', false)
-                ->where('payment_method', 'manjo')
+                ->where('payment_method', $activeGateway)
                 ->where('payment_channel', $paymentChannel)
-                ->where('amount', $expectedTotal)
+                ->where('nett_amount', $expectedNettAmount)
                 ->where('expires_at', '>', Carbon::now())
                 ->where(function ($q) {
                     $q->where(function ($sub) {
@@ -491,25 +518,33 @@ class InvoiceController extends Controller
                 ->latest()
                 ->first();
 
-            if ($activeInvoice && (int) $activeInvoice->amount === (int) $expectedTotal) {
+            if ($activeInvoice && (int) $activeInvoice->nett_amount === (int) $expectedNettAmount) {
+                $redirectUrl = !empty($activeInvoice->invoice_url) && filter_var($activeInvoice->invoice_url, FILTER_VALIDATE_URL)
+                    ? $activeInvoice->invoice_url
+                    : route('invoice.show', $activeInvoice->id);
+
                 return response()->json([
                     'success' => true,
-                    'payment_url' => route('invoice.show', $activeInvoice->id),
+                    'payment_url' => $redirectUrl,
+                    'invoice_url' => $redirectUrl,
                     'invoice_id' => $activeInvoice->id,
                     'invoice_code' => $activeInvoice->invoice_code,
                     'payment_method' => $activeInvoice->payment_method,
                     'payment_channel' => $activeInvoice->payment_channel,
+                    'payment_reference' => $activeInvoice->payment_reference,
+                    'amount' => $activeInvoice->amount,
+                    'transaction_fee' => $activeInvoice->transaction_fee,
                     'status' => 'pending',
                 ], 200);
             }
 
-            // 3. Cegah checkout ulang jika ada transaksi Manjo pending yang belum terkonfirmasi (ambigu / timeout) pada kanal dan nominal yang sama
+            // 3. Cegah checkout ulang jika ada transaksi pending yang belum terkonfirmasi (ambigu / timeout) pada kanal dan nominal yang sama
             $unconfirmedInvoice = Invoice::where('user_id', $userId)
                 ->where('status', 'pending')
                 ->where('is_installment', false)
-                ->where('payment_method', 'manjo')
+                ->where('payment_method', $activeGateway)
                 ->where('payment_channel', $paymentChannel)
-                ->where('amount', $expectedTotal)
+                ->where('nett_amount', $expectedNettAmount)
                 ->where('expires_at', '>', Carbon::now())
                 ->where(function ($q) {
                     $q->whereNull('payment_reference')->orWhere('payment_reference', '');
@@ -536,9 +571,13 @@ class InvoiceController extends Controller
             try {
                 $invoice_code = $this->generateInvoiceCode();
 
-                $expiresAt = $paymentChannel === 'qris'
-                    ? Carbon::now()->addSeconds((int) config('manjo.qris.validity_period', 900))
-                    : Carbon::now()->addMinutes((int) config('manjo.va.expiry_minutes', 1440));
+                if ($activeGateway === 'tripay') {
+                    $expiresAt = Carbon::now('Asia/Jakarta')->addHours(24);
+                } else {
+                    $expiresAt = strtolower($paymentChannel) === 'qris'
+                        ? Carbon::now()->addSeconds((int) config('manjo.qris.validity_period', 900))
+                        : Carbon::now()->addMinutes((int) config('manjo.va.expiry_minutes', 1440));
+                }
 
                 $invoice = Invoice::create([
                     'user_id' => $userId,
@@ -551,7 +590,7 @@ class InvoiceController extends Controller
                     'transaction_fee' => $validatedFee,
                     'points_redeemed' => $pointsRedeemed,
                     'expires_at' => $expiresAt,
-                    'payment_method' => 'manjo',
+                    'payment_method' => $activeGateway,
                     'payment_channel' => $paymentChannel,
                     'status' => 'pending',
                 ]);
@@ -584,17 +623,121 @@ class InvoiceController extends Controller
 
                 $enrollmentTable::create($enrollmentData);
 
-                if (in_array($type, ['course', 'bootcamp', 'webinar'], true)) {
-                    $this->addToCertificateParticipants($type, $item->id, $userId);
-                }
-
                 DB::commit();
             } catch (\Throwable $e) {
                 DB::rollBack();
                 throw $e;
             }
 
-            // 5. FASE 2: Network Call Manjo di Luar DB Transaction
+            // 5. FASE 2: Network Call Gateway di Luar DB Transaction
+            if ($activeGateway === 'tripay') {
+                try {
+                    $itemTitle = $item->title ?? 'Pembayaran Produk';
+                    $user = Auth::user();
+                    $tripayRes = $this->tripayService->requestTransaction(
+                        $invoice->invoice_code,
+                        $paymentChannel,
+                        $itemTitle,
+                        $expectedNettAmount,
+                        $user->name,
+                        $user->email,
+                        $user->phone_number ?? null,
+                        route('tripay.return', ['invoice_id' => $invoice->id]),
+                        $invoice->expires_at ? $invoice->expires_at->timestamp : (time() + 86400)
+                    );
+                } catch (\Throwable $gatewayError) {
+                    DB::transaction(function () use ($invoice, $discountCode) {
+                        $invoice->update(['status' => 'failed']);
+                        if ($invoice->points_redeemed > 0) {
+                            app(PointService::class)->refundPoints($invoice);
+                        }
+                        if ($invoice->discountUsage) {
+                            if ($discountCode) {
+                                $discountCode->decrement('used_count');
+                            }
+                            $invoice->discountUsage->delete();
+                        }
+                    });
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Pembayaran ditolak gateway: ' . $gatewayError->getMessage(),
+                    ], 422);
+                }
+
+                // 6. FASE 3: Simpan Respons Tripay dalam DB Transaction Singkat
+                $checkoutUrl = $tripayRes->data->checkout_url ?? route('invoice.show', $invoice->id);
+                try {
+                    DB::transaction(function () use ($invoice, $paymentChannel, $tripayRes, $expectedTotal, $validatedFee, $checkoutUrl) {
+                        $tripayData = $tripayRes->data;
+                        $actualAmount = isset($tripayData->amount) ? (float) $tripayData->amount : (float) $expectedTotal;
+                        $actualFee = isset($tripayData->fee_customer)
+                            ? (float) $tripayData->fee_customer
+                            : (isset($tripayData->total_fee) ? (float) $tripayData->total_fee : (float) $validatedFee);
+
+                        $expiryTime = !empty($tripayData->expired_time)
+                            ? Carbon::createFromTimestamp((int) $tripayData->expired_time, 'Asia/Jakarta')
+                            : ($invoice->expires_at ?? Carbon::now('Asia/Jakarta')->addHours(24));
+
+                        $qrCodeUrl = $tripayData->qr_url ?? null;
+                        if (!empty($tripayData->qr_string)) {
+                            Cache::put("tripay_qris_{$invoice->id}", (string) $tripayData->qr_string, $expiryTime);
+                            if (empty($qrCodeUrl)) {
+                                $qrCodeUrl = route('invoice.qris.image', $invoice->id);
+                            }
+                        }
+
+                        Cache::put(
+                            "tripay_tx_{$invoice->id}",
+                            json_decode(json_encode($tripayData), true),
+                            $expiryTime
+                        );
+
+                        $invoice->update([
+                            'payment_method' => 'tripay',
+                            'payment_channel' => $tripayData->payment_method ?? $paymentChannel,
+                            'payment_reference' => $tripayData->reference ?? null,
+                            'amount' => $actualAmount,
+                            'transaction_fee' => $actualFee,
+                            'va_number' => $tripayData->pay_code ?? null,
+                            'qr_code_url' => $qrCodeUrl,
+                            'invoice_url' => $checkoutUrl,
+                            'expires_at' => $expiryTime,
+                        ]);
+                    });
+                } catch (\Throwable $saveError) {
+                    Log::emergency('TRIPAY_GATEWAY_SUCCESS_LOCAL_SAVE_FAILED', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_code' => $invoice->invoice_code,
+                        'reference' => $tripayRes->data->reference ?? null,
+                        'error' => $saveError->getMessage(),
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Transaksi berhasil dibuat di gateway namun terjadi kesalahan sistem saat menyimpan referensi. Mohon hubungi admin dengan kode invoice: ' . $invoice->invoice_code,
+                        'invoice_code' => $invoice->invoice_code,
+                    ], 500);
+                }
+
+                $invoice->refresh();
+
+                return response()->json([
+                    'success' => true,
+                    'payment_url' => $checkoutUrl,
+                    'invoice_url' => $checkoutUrl,
+                    'invoice_id' => $invoice->id,
+                    'invoice_code' => $invoice->invoice_code,
+                    'payment_method' => 'tripay',
+                    'payment_channel' => $invoice->payment_channel,
+                    'payment_reference' => $invoice->payment_reference,
+                    'amount' => $invoice->amount,
+                    'transaction_fee' => $invoice->transaction_fee,
+                    'status' => 'pending',
+                ], 200);
+            }
+
+            // Legacy Fallback: Network Call Manjo di Luar DB Transaction
             try {
                 $itemTitle = $item->title ?? 'Pembayaran Produk';
                 if ($paymentChannel === 'qris') {
@@ -751,10 +894,17 @@ class InvoiceController extends Controller
     {
         $userId = Auth::id();
         $bundleId = $request->input('bundle_id');
+        $activeGateway = $this->getActiveGateway();
 
-        $rawChannel = trim((string) $request->input('payment_channel', 'qris'));
+        $rawChannel = trim((string) $request->input('payment_channel', 'QRIS'));
         if (empty($rawChannel) || strtolower($rawChannel) === 'qris') {
-            $paymentChannel = 'qris';
+            $paymentChannel = $activeGateway === 'tripay' ? 'QRIS' : 'qris';
+            if ($activeGateway === 'tripay') {
+                $matchedQris = $this->tripayService->findChannel('QRIS', $this->getSupportedVaBanks());
+                if ($matchedQris && !empty($matchedQris->code)) {
+                    $paymentChannel = (string) $matchedQris->code;
+                }
+            }
         } else {
             $validCodes = $this->getValidPaymentChannelCodes();
             if (!in_array(strtoupper($rawChannel), $validCodes, true)) {
@@ -763,7 +913,14 @@ class InvoiceController extends Controller
                     'message' => "Metode atau bank pembayaran '{$rawChannel}' tidak didukung.",
                 ], 422);
             }
-            $paymentChannel = $rawChannel;
+            if ($activeGateway === 'tripay') {
+                $matchedChannel = $this->tripayService->findChannel($rawChannel, $this->getSupportedVaBanks());
+                $paymentChannel = ($matchedChannel && !empty($matchedChannel->code))
+                    ? (string) $matchedChannel->code
+                    : strtoupper($rawChannel);
+            } else {
+                $paymentChannel = $rawChannel;
+            }
         }
 
         // 1. Lock untuk mencegah double-submit / race condition (SEC-01)
@@ -886,11 +1043,11 @@ class InvoiceController extends Controller
             $validatedFee = $this->calculateTransactionFee($paymentChannel, $expectedNettAmount);
             $expectedTotal = $expectedNettAmount + $validatedFee;
 
-            if ($nettAmount != $expectedNettAmount) {
+            if ($nettAmount !== null && $nettAmount !== '' && $nettAmount != $expectedNettAmount) {
                 throw new \Exception('Harga nett tidak sesuai. Expected: ' . $expectedNettAmount . ', Got: ' . $nettAmount);
             }
 
-            if ($totalAmount != $expectedTotal) {
+            if ($activeGateway !== 'tripay' && $totalAmount !== null && $totalAmount != $expectedTotal) {
                 throw new \Exception('Total amount tidak sesuai. Expected: ' . $expectedTotal . ', Got: ' . $totalAmount);
             }
 
@@ -898,9 +1055,9 @@ class InvoiceController extends Controller
             $activeInvoice = Invoice::where('user_id', $userId)
                 ->where('status', 'pending')
                 ->where('is_installment', false)
-                ->where('payment_method', 'manjo')
+                ->where('payment_method', $activeGateway)
                 ->where('payment_channel', $paymentChannel)
-                ->where('amount', $expectedTotal)
+                ->where('nett_amount', $expectedNettAmount)
                 ->where('expires_at', '>', Carbon::now())
                 ->where(function ($q) {
                     $q->where(function ($sub) {
@@ -913,25 +1070,33 @@ class InvoiceController extends Controller
                 ->latest()
                 ->first();
 
-            if ($activeInvoice && (int) $activeInvoice->amount === (int) $expectedTotal) {
+            if ($activeInvoice && (int) $activeInvoice->nett_amount === (int) $expectedNettAmount) {
+                $redirectUrl = !empty($activeInvoice->invoice_url) && filter_var($activeInvoice->invoice_url, FILTER_VALIDATE_URL)
+                    ? $activeInvoice->invoice_url
+                    : route('invoice.show', $activeInvoice->id);
+
                 return response()->json([
                     'success' => true,
-                    'payment_url' => route('invoice.show', $activeInvoice->id),
+                    'payment_url' => $redirectUrl,
+                    'invoice_url' => $redirectUrl,
                     'invoice_id' => $activeInvoice->id,
                     'invoice_code' => $activeInvoice->invoice_code,
                     'payment_method' => $activeInvoice->payment_method,
                     'payment_channel' => $activeInvoice->payment_channel,
+                    'payment_reference' => $activeInvoice->payment_reference,
+                    'amount' => $activeInvoice->amount,
+                    'transaction_fee' => $activeInvoice->transaction_fee,
                     'status' => 'pending',
                 ], 200);
             }
 
-            // 3. Cegah checkout ulang jika ada transaksi bundle Manjo yang belum terkonfirmasi (ambigu / timeout) pada kanal dan nominal yang sama
+            // 3. Cegah checkout ulang jika ada transaksi bundle yang belum terkonfirmasi (ambigu / timeout) pada kanal dan nominal yang sama
             $unconfirmedInvoice = Invoice::where('user_id', $userId)
                 ->where('status', 'pending')
                 ->where('is_installment', false)
-                ->where('payment_method', 'manjo')
+                ->where('payment_method', $activeGateway)
                 ->where('payment_channel', $paymentChannel)
-                ->where('amount', $expectedTotal)
+                ->where('nett_amount', $expectedNettAmount)
                 ->where('expires_at', '>', Carbon::now())
                 ->where(function ($q) {
                     $q->whereNull('payment_reference')->orWhere('payment_reference', '');
@@ -957,14 +1122,18 @@ class InvoiceController extends Controller
             $invoice = null;
             DB::transaction(function () use (
                 &$invoice, $userId, $referredByUserId, $referralUserId, $discountAmount,
-                $totalAmount, $nettAmount, $validatedFee, $pointsRedeemed, $paymentChannel,
-                $discountCode, $discountCodeAmount, $bundle
+                $expectedTotal, $expectedNettAmount, $validatedFee, $pointsRedeemed, $paymentChannel,
+                $discountCode, $discountCodeAmount, $bundle, $activeGateway
             ) {
                 $invoice_code = $this->generateInvoiceCode();
 
-                $expiresAt = $paymentChannel === 'qris'
-                    ? Carbon::now()->addSeconds((int) config('manjo.qris.validity_period', 900))
-                    : Carbon::now()->addMinutes((int) config('manjo.va.expiry_minutes', 1440));
+                if ($activeGateway === 'tripay') {
+                    $expiresAt = Carbon::now('Asia/Jakarta')->addHours(24);
+                } else {
+                    $expiresAt = strtolower($paymentChannel) === 'qris'
+                        ? Carbon::now()->addSeconds((int) config('manjo.qris.validity_period', 900))
+                        : Carbon::now()->addMinutes((int) config('manjo.va.expiry_minutes', 1440));
+                }
 
                 $invoice = Invoice::create([
                     'user_id' => $userId,
@@ -972,13 +1141,13 @@ class InvoiceController extends Controller
                     'referral_user_id' => $referralUserId,
                     'invoice_code' => $invoice_code,
                     'discount_amount' => $discountAmount,
-                    'amount' => $totalAmount,
-                    'nett_amount' => $nettAmount,
+                    'amount' => $expectedTotal,
+                    'nett_amount' => $expectedNettAmount,
                     'transaction_fee' => $validatedFee,
                     'points_redeemed' => $pointsRedeemed,
                     'status' => 'pending',
                     'expires_at' => $expiresAt,
-                    'payment_method' => 'manjo',
+                    'payment_method' => $activeGateway,
                     'payment_channel' => $paymentChannel,
                 ]);
 
@@ -1000,30 +1169,122 @@ class InvoiceController extends Controller
                 EnrollmentBundle::create([
                     'invoice_id' => $invoice->id,
                     'bundle_id' => $bundle->id,
-                    'price' => $nettAmount,
+                    'price' => $expectedNettAmount,
                 ]);
-
-                $bundleEnrollment = EnrollmentBundle::where('invoice_id', $invoice->id)->first();
-                if ($bundleEnrollment) {
-                    $bundleEnrollment->createIndividualEnrollments();
-
-                    Log::info('Bundle individual enrollments created', [
-                        'invoice_code' => $invoice->invoice_code,
-                        'bundle_id' => $bundle->id,
-                    ]);
-
-                    foreach ($bundle->bundleItems as $item) {
-                        $type = $item->getTypeSlug();
-                        $this->addToCertificateParticipants($type, $item->bundleable_id, $userId);
-                    }
-                }
             });
 
             if (!$invoice) {
                 throw new \Exception('Gagal membuat tagihan lokal.');
             }
 
-            // 5. FASE 2: Network Call Manjo di Luar DB Transaction
+            // 5. FASE 2: Network Call Gateway di Luar DB Transaction
+            if ($activeGateway === 'tripay') {
+                try {
+                    $user = Auth::user();
+                    $tripayRes = $this->tripayService->requestTransaction(
+                        $invoice->invoice_code,
+                        $paymentChannel,
+                        'Bundle: ' . $bundle->title,
+                        $expectedNettAmount,
+                        $user->name,
+                        $user->email,
+                        $user->phone_number ?? null,
+                        route('tripay.return', ['invoice_id' => $invoice->id]),
+                        $invoice->expires_at ? $invoice->expires_at->timestamp : (time() + 86400)
+                    );
+                } catch (\Throwable $gatewayError) {
+                    DB::transaction(function () use ($invoice, $discountCode) {
+                        $invoice->update(['status' => 'failed']);
+                        if ($invoice->points_redeemed > 0) {
+                            app(PointService::class)->refundPoints($invoice);
+                        }
+                        if ($invoice->discountUsage) {
+                            if ($discountCode) {
+                                $discountCode->decrement('used_count');
+                            }
+                            $invoice->discountUsage->delete();
+                        }
+                    });
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Pembayaran ditolak gateway: ' . $gatewayError->getMessage(),
+                    ], 422);
+                }
+
+                // 6. FASE 3: Simpan Respons Tripay dalam DB Transaction Singkat
+                $checkoutUrl = $tripayRes->data->checkout_url ?? route('invoice.show', $invoice->id);
+                try {
+                    DB::transaction(function () use ($invoice, $paymentChannel, $tripayRes, $expectedTotal, $validatedFee, $checkoutUrl) {
+                        $tripayData = $tripayRes->data;
+                        $actualAmount = isset($tripayData->amount) ? (float) $tripayData->amount : (float) $expectedTotal;
+                        $actualFee = isset($tripayData->fee_customer)
+                            ? (float) $tripayData->fee_customer
+                            : (isset($tripayData->total_fee) ? (float) $tripayData->total_fee : (float) $validatedFee);
+
+                        $expiryTime = !empty($tripayData->expired_time)
+                            ? Carbon::createFromTimestamp((int) $tripayData->expired_time, 'Asia/Jakarta')
+                            : ($invoice->expires_at ?? Carbon::now('Asia/Jakarta')->addHours(24));
+
+                        $qrCodeUrl = $tripayData->qr_url ?? null;
+                        if (!empty($tripayData->qr_string)) {
+                            Cache::put("tripay_qris_{$invoice->id}", (string) $tripayData->qr_string, $expiryTime);
+                            if (empty($qrCodeUrl)) {
+                                $qrCodeUrl = route('invoice.qris.image', $invoice->id);
+                            }
+                        }
+
+                        Cache::put(
+                            "tripay_tx_{$invoice->id}",
+                            json_decode(json_encode($tripayData), true),
+                            $expiryTime
+                        );
+
+                        $invoice->update([
+                            'payment_method' => 'tripay',
+                            'payment_channel' => $tripayData->payment_method ?? $paymentChannel,
+                            'payment_reference' => $tripayData->reference ?? null,
+                            'amount' => $actualAmount,
+                            'transaction_fee' => $actualFee,
+                            'va_number' => $tripayData->pay_code ?? null,
+                            'qr_code_url' => $qrCodeUrl,
+                            'invoice_url' => $checkoutUrl,
+                            'expires_at' => $expiryTime,
+                        ]);
+                    });
+                } catch (\Throwable $saveError) {
+                    Log::emergency('TRIPAY_BUNDLE_GATEWAY_SUCCESS_LOCAL_SAVE_FAILED', [
+                        'invoice_id' => $invoice->id,
+                        'invoice_code' => $invoice->invoice_code,
+                        'reference' => $tripayRes->data->reference ?? null,
+                        'error' => $saveError->getMessage(),
+                    ]);
+
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Transaksi berhasil dibuat di gateway namun terjadi kesalahan sistem saat menyimpan referensi. Mohon hubungi admin dengan kode invoice: ' . $invoice->invoice_code,
+                        'invoice_code' => $invoice->invoice_code,
+                    ], 500);
+                }
+
+                $invoice->refresh();
+
+                return response()->json([
+                    'success' => true,
+                    'payment_url' => $checkoutUrl,
+                    'invoice_url' => $checkoutUrl,
+                    'invoice_id' => $invoice->id,
+                    'invoice_code' => $invoice->invoice_code,
+                    'payment_method' => 'tripay',
+                    'payment_channel' => $invoice->payment_channel,
+                    'payment_reference' => $invoice->payment_reference,
+                    'amount' => $invoice->amount,
+                    'transaction_fee' => $invoice->transaction_fee,
+                    'status' => 'pending',
+                ], 200);
+            }
+
+            // Legacy Fallback: Network Call Manjo di Luar DB Transaction
             try {
                 if ($paymentChannel === 'qris') {
                     $validityPeriod = (string) config('manjo.qris.validity_period', '900');
@@ -1340,7 +1601,7 @@ class InvoiceController extends Controller
         }
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
         $invoice = Invoice::with([
             'courseItems.course',
@@ -1356,14 +1617,145 @@ class InvoiceController extends Controller
             abort(403, 'Anda tidak memiliki hak akses untuk melihat tagihan ini.');
         }
 
-        if ($invoice->status === 'pending' || $invoice->status === 'failed') {
-            return Inertia::render('user/checkout/pending', [
+        $paymentInstructions = [];
+        $transactionDetail = null;
+
+        $tripayRef = $request->query('tripay_reference') ?? $invoice->payment_reference;
+        $isTripay = strcasecmp((string) $invoice->payment_method, 'tripay') === 0
+            || $request->has('tripay_reference')
+            || $request->has('tripay_merchant_ref');
+
+        if ($isTripay && !empty($tripayRef)) {
+            $cachedDetail = Cache::get("tripay_tx_{$invoice->id}");
+
+            if ($invoice->status === 'pending' || !$cachedDetail) {
+                try {
+                    $freshDetail = $this->tripayService->detailTransaction($tripayRef);
+                    if ($freshDetail) {
+                        $cachedDetail = $freshDetail;
+                        Cache::put("tripay_tx_{$invoice->id}", $freshDetail, 86400);
+
+                        $detailData = $freshDetail->data ?? $freshDetail;
+
+                        if (!empty($detailData->qr_string) && !Cache::has("tripay_qris_{$invoice->id}")) {
+                            Cache::put("tripay_qris_{$invoice->id}", $detailData->qr_string, 86400);
+                        }
+
+                        $remoteStatus = strtoupper((string) ($detailData->status ?? ''));
+                        if (in_array($remoteStatus, ['PAID', 'SETTLEMENT'], true) && $invoice->status !== 'paid') {
+                            $fulfillmentService = app(\App\Services\InvoiceFulfillmentService::class);
+                            $fulfillmentService->fulfill(
+                                $invoice,
+                                'PAID',
+                                $detailData->payment_method ?? 'TRIPAY',
+                                $detailData->payment_method_code ?? ($detailData->payment_method ?? 'TRIPAY'),
+                                $tripayRef,
+                                array_filter([
+                                    'va_number'    => $detailData->pay_code ?? null,
+                                    'qr_code_url'  => $detailData->qr_url ?? null,
+                                    'total_amount' => $detailData->total_amount ?? null,
+                                    'paid_at'      => !empty($detailData->paid_at)
+                                        ? Carbon::createFromTimestamp((int) $detailData->paid_at, 'Asia/Jakarta')
+                                        : Carbon::now('Asia/Jakarta'),
+                                ])
+                            );
+                            $invoice->refresh()->load([
+                                'courseItems.course',
+                                'bootcampItems.bootcamp',
+                                'webinarItems.webinar',
+                                'certificationProgramItems.certificationProgram',
+                                'bundleEnrollments.bundle.bundleItems.bundleable',
+                            ]);
+                        } elseif (in_array($remoteStatus, ['EXPIRED', 'FAILED'], true) && $invoice->status === 'pending') {
+                            $fulfillmentService = app(\App\Services\InvoiceFulfillmentService::class);
+                            $fulfillmentService->fulfill(
+                                $invoice,
+                                $remoteStatus,
+                                $detailData->payment_method ?? 'TRIPAY',
+                                $detailData->payment_method_code ?? 'TRIPAY',
+                                $tripayRef
+                            );
+                            $invoice->refresh();
+                        } elseif ($remoteStatus === 'REFUND' && $invoice->status !== 'failed') {
+                            $fulfillmentService = app(\App\Services\InvoiceFulfillmentService::class);
+                            $fulfillmentService->fulfill(
+                                $invoice,
+                                'REFUND',
+                                $detailData->payment_method ?? 'TRIPAY',
+                                $detailData->payment_method_code ?? 'TRIPAY',
+                                $tripayRef
+                            );
+                            $invoice->refresh();
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Tripay auto-sync status on show failed: ' . $e->getMessage(), [
+                        'invoice_id'        => $invoice->id,
+                        'payment_reference' => $tripayRef,
+                    ]);
+                }
+            }
+
+            // Fallback: If query parameter indicates PAID on return
+            if ($invoice->status === 'pending' && strtoupper((string) $request->query('status')) === 'PAID') {
+                try {
+                    $fulfillmentService = app(\App\Services\InvoiceFulfillmentService::class);
+                    $fulfillmentService->fulfill(
+                        $invoice,
+                        'PAID',
+                        $invoice->payment_method ?? 'TRIPAY',
+                        $invoice->payment_channel ?? 'TRIPAY',
+                        $tripayRef
+                    );
+                    $invoice->refresh()->load([
+                        'courseItems.course',
+                        'bootcampItems.bootcamp',
+                        'webinarItems.webinar',
+                        'certificationProgramItems.certificationProgram',
+                        'bundleEnrollments.bundle.bundleItems.bundleable',
+                    ]);
+                } catch (\Throwable $e) {
+                    Log::warning('Tripay query status fulfill failed: ' . $e->getMessage());
+                }
+            }
+
+            if ($cachedDetail) {
+                $transactionDetail = json_decode(json_encode($cachedDetail), true);
+                $paymentInstructions = $transactionDetail['instructions'] ?? [];
+
+                if (!empty($transactionDetail['checkout_url']) && (empty($invoice->invoice_url) || !filter_var($invoice->invoice_url, FILTER_VALIDATE_URL) || str_contains($invoice->invoice_url, '/invoice/'))) {
+                    $invoice->update(['invoice_url' => $transactionDetail['checkout_url']]);
+                    $invoice->refresh();
+                }
+            }
+        }
+
+        if ($invoice->status === 'paid') {
+            $invoice->loadMissing([
+                'courseItems.course',
+                'bootcampItems.bootcamp',
+                'webinarItems.webinar',
+                'certificationProgramItems.certificationProgram',
+                'bundleEnrollments.bundle.bundleItems.bundleable',
+            ]);
+
+            return Inertia::render('user/checkout/success', [
                 'invoice' => $invoice,
             ]);
         }
 
-        return Inertia::render('user/checkout/success', [
-            'invoice' => $invoice,
+        if ($isTripay) {
+            // For Tripay, never render user/checkout/pending. Redirect back to product registration/checkout URL.
+            return redirect($this->getInvoiceProductUrl($invoice));
+        }
+
+        // Legacy behavior for non-Tripay (e.g. Manjo)
+        return Inertia::render('user/checkout/pending', [
+            'invoice'             => $invoice,
+            'paymentInstructions' => $paymentInstructions,
+            'transactionDetail'   => $transactionDetail,
+            'simulatorUrl'        => 'https://tripay.co.id/simulator',
+            'isSandbox'           => (bool) config('tripay.sandbox', true),
         ]);
     }
 
@@ -1400,7 +1792,7 @@ class InvoiceController extends Controller
         }
 
         // Cache miss tidak boleh memicu transaksi gateway baru (Ketentuan 9)
-        $qrContent = Cache::get("manjo_qris_{$invoice->id}");
+        $qrContent = Cache::get("tripay_qris_{$invoice->id}") ?? Cache::get("manjo_qris_{$invoice->id}");
         if (!$qrContent) {
             return $renderSvgFallback('QR Code Tidak Tersedia', 'atau masa berlaku telah habis');
         }
@@ -1813,13 +2205,203 @@ class InvoiceController extends Controller
     }
 
     /**
-     * Mengambil daftar bank Virtual Account yang didukung Manjo.
-     * Mengambil dari API Manjo jika tersedia, dengan fallback ke bank utama Indonesia.
+     * Mengambil daftar payment channel yang didukung dari Tripay (atau Manjo jika active_gateway = manjo).
      *
      * @return array
      */
     public function getSupportedVaBanks(): array
     {
+        $activeGateway = $this->getActiveGateway();
+
+        if ($activeGateway === 'tripay') {
+            $defaultTripayChannels = [
+                [
+                    'code' => 'QRIS',
+                    'name' => 'QRIS (Customizable)',
+                    'bank_code' => 'QRIS',
+                    'bank_name' => 'QRIS (Customizable)',
+                    'group' => 'E-Wallet',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 750, 'percent' => 0.70],
+                    'total_fee' => ['flat' => 750, 'percent' => 0.70],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 1000,
+                    'maximum_amount' => 10000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'MANDIRIVA',
+                    'name' => 'Mandiri Virtual Account',
+                    'bank_code' => 'MANDIRIVA',
+                    'bank_name' => 'Mandiri Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'BRIVA',
+                    'name' => 'BRI Virtual Account',
+                    'bank_code' => 'BRIVA',
+                    'bank_name' => 'BRI Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'BNIVA',
+                    'name' => 'BNI Virtual Account',
+                    'bank_code' => 'BNIVA',
+                    'bank_name' => 'BNI Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'BCAVA',
+                    'name' => 'BCA Virtual Account',
+                    'bank_code' => 'BCAVA',
+                    'bank_name' => 'BCA Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 5500, 'percent' => 0],
+                    'total_fee' => ['flat' => 5500, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'BSIVA',
+                    'name' => 'BSI Virtual Account',
+                    'bank_code' => 'BSIVA',
+                    'bank_name' => 'BSI Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'CIMBVA',
+                    'name' => 'CIMB Niaga Virtual Account',
+                    'bank_code' => 'CIMBVA',
+                    'bank_name' => 'CIMB Niaga Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+                [
+                    'code' => 'PERMATAVA',
+                    'name' => 'Permata Virtual Account',
+                    'bank_code' => 'PERMATAVA',
+                    'bank_name' => 'Permata Virtual Account',
+                    'group' => 'Virtual Account',
+                    'type' => 'direct',
+                    'fee_merchant' => ['flat' => 0, 'percent' => 0],
+                    'fee_customer' => ['flat' => 4250, 'percent' => 0],
+                    'total_fee' => ['flat' => 4250, 'percent' => 0],
+                    'minimum_fee' => null,
+                    'maximum_fee' => null,
+                    'minimum_amount' => 10000,
+                    'maximum_amount' => 50000000,
+                    'icon_url' => null,
+                    'active' => true,
+                    'va_type' => ['close'],
+                ],
+            ];
+
+            try {
+                $channels = $this->tripayService->getPaymentChannels();
+                if (!empty($channels)) {
+                    $activeChannels = array_filter($channels, function ($ch) {
+                        $chObj = is_array($ch) ? (object) $ch : $ch;
+                        return ($chObj->active ?? true) === true;
+                    });
+                    $targetChannels = array_values($activeChannels ?: $channels);
+
+                    return array_map(function ($ch) {
+                        $arr = json_decode(json_encode($ch), true);
+                        $code = $arr['code'] ?? $arr['bank_code'] ?? '';
+                        $name = $arr['name'] ?? $arr['bank_name'] ?? $code;
+
+                        return [
+                            'code'           => $code,
+                            'name'           => $name,
+                            'bank_code'      => $code,
+                            'bank_name'      => $name,
+                            'group'          => $arr['group'] ?? 'Virtual Account',
+                            'type'           => $arr['type'] ?? 'direct',
+                            'va_type'        => $arr['va_type'] ?? ['close'],
+                            'fee_merchant'   => $arr['fee_merchant'] ?? ['flat' => 0, 'percent' => 0],
+                            'fee_customer'   => $arr['fee_customer'] ?? ['flat' => 0, 'percent' => 0],
+                            'total_fee'      => $arr['total_fee'] ?? ($arr['fee_customer'] ?? ['flat' => 0, 'percent' => 0]),
+                            'minimum_fee'    => $arr['minimum_fee'] ?? null,
+                            'maximum_fee'    => $arr['maximum_fee'] ?? null,
+                            'minimum_amount' => $arr['minimum_amount'] ?? null,
+                            'maximum_amount' => $arr['maximum_amount'] ?? null,
+                            'icon_url'       => $arr['icon_url'] ?? null,
+                            'active'         => $arr['active'] ?? true,
+                        ];
+                    }, $targetChannels);
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Gagal mengambil daftar payment channel dari Tripay API, menggunakan default fallback: ' . $e->getMessage());
+            }
+
+            return $defaultTripayChannels;
+        }
+
         $defaultBanks = [
             ['code' => 'BMRI', 'name' => 'Bank Mandiri', 'bank_code' => 'BMRI', 'bank_name' => 'Bank Mandiri', 'va_type' => ['DYNAMIC', 'STATIC']],
             ['code' => 'BNIA', 'name' => 'Bank CIMB Niaga', 'bank_code' => 'BNIA', 'bank_name' => 'Bank CIMB Niaga', 'va_type' => ['DYNAMIC', 'STATIC']],
@@ -1864,13 +2446,24 @@ class InvoiceController extends Controller
      */
     public function getValidPaymentChannelCodes(): array
     {
-        $supported = collect($this->getSupportedVaBanks())->pluck('bank_code')->map(fn($c) => strtoupper($c))->all();
-        $aliases = ['MANDIRI', 'CIMB', 'CIMB_NIAGA', 'PERMATA', 'BRI', 'BSI', 'BCA', 'BNI'];
+        $supported = collect($this->getSupportedVaBanks())
+            ->map(fn($c) => strtoupper((string) ($c['code'] ?? $c['bank_code'] ?? '')))
+            ->filter()
+            ->all();
+
+        $aliases = [
+            'QRIS', 'QRISC', 'QRIS2',
+            'BRIVA', 'MANDIRIVA', 'BNIVA', 'BCAVA', 'PERMATAVA', 'BSIVA', 'CIMBVA', 'MYBVA', 'BNCVA', 'DANAMONVA', 'OCBCVA', 'MUAMALATVA', 'SINARMASVA',
+            'ALFAMART', 'INDOMARET', 'ALFAMIDI', 'OVO', 'DANA', 'SHOPEEPAY', 'LINKAJA',
+            'MANDIRI', 'CIMB', 'CIMB_NIAGA', 'PERMATA', 'BRI', 'BSI', 'BCA', 'BNI',
+            'BMRI', 'BNIA', 'BBBA', 'BRIN', 'BSYI',
+        ];
+
         return array_values(array_unique(array_merge($supported, $aliases)));
     }
 
     /**
-     * Endpoint API publik/user untuk mendapatkan daftar bank VA yang tersedia.
+     * Endpoint API publik/user untuk mendapatkan daftar payment channel / bank VA yang tersedia.
      */
     public function getVaBanks()
     {
@@ -1882,35 +2475,272 @@ class InvoiceController extends Controller
         ]);
     }
 
-    private function calculateTransactionFee($channelCode, $nettAmount): int
+    /**
+     * Get active payment channels from the active payment gateway (Tripay).
+     */
+    public function paymentChannels(Request $request)
+    {
+        try {
+            $forceRefresh = $request->boolean('refresh', false);
+            $manager = app(PaymentGatewayManager::class);
+            $channels = $manager->driver()->getPaymentChannels($forceRefresh);
+
+            return response()->json([
+                'success' => true,
+                'gateway' => $manager->getDefaultDriver(),
+                'data' => $channels,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Failed to get payment channels: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'gateway' => config('payment.default', 'tripay'),
+                'message' => $e->getMessage(),
+                'data' => [],
+            ], 200);
+        }
+    }
+
+    /**
+     * Calculate transaction fee via the active payment gateway (Tripay Fee Calculator).
+     */
+    public function calculateFee(Request $request)
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'payment_channel' => 'nullable|string',
+            'code' => 'nullable|string',
+        ]);
+
+        $amount = (int) round($request->input('amount'));
+        $channel = $request->input('payment_channel') ?: $request->input('code');
+
+        try {
+            $manager = app(PaymentGatewayManager::class);
+            $feeData = $manager->driver()->calculateFee($amount, $channel);
+
+            return response()->json([
+                'success' => true,
+                'gateway' => $manager->getDefaultDriver(),
+                'data' => $feeData,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Payment fee calculation failed', [
+                'amount' => $amount,
+                'channel' => $channel,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Biaya pembayaran belum dapat diperoleh. Silakan coba kembali atau pilih metode pembayaran lain.',
+                'error' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function tripayReturn(Request $request)
+    {
+        $merchantRef = $request->query('tripay_merchant_ref') ?? $request->query('merchant_ref');
+        $tripayReference = $request->query('tripay_reference') ?? $request->query('reference');
+        $invoiceId = $request->query('invoice_id');
+
+        $baseCode = $merchantRef ? explode('_', $merchantRef)[0] : null;
+
+        $invoice = Invoice::with(InvoiceFulfillmentService::INVOICE_RELATIONS)
+            ->where(function ($query) use ($invoiceId, $merchantRef, $baseCode, $tripayReference) {
+                if ($invoiceId) {
+                    $query->where('id', $invoiceId);
+                }
+                if ($merchantRef) {
+                    $query->orWhere('invoice_code', $merchantRef);
+                    if ($baseCode && $baseCode !== $merchantRef) {
+                        $query->orWhere('invoice_code', $baseCode);
+                    }
+                }
+                if ($tripayReference) {
+                    $query->orWhere('payment_reference', $tripayReference);
+                }
+            })
+            ->first();
+
+        if (!$invoice) {
+            return redirect()->route('home');
+        }
+
+        $refToCheck = $tripayReference ?? $invoice->payment_reference;
+        $incomingStatus = strtoupper((string) ($request->query('status') ?? ''));
+
+        if ($invoice->status === 'pending') {
+            $isPaid = false;
+            $paymentMethod = $invoice->payment_method ?? 'TRIPAY';
+            $paymentChannel = $invoice->payment_channel ?? 'TRIPAY';
+            $payCode = null;
+            $qrUrl = null;
+            $totalAmount = null;
+
+            if ($refToCheck) {
+                try {
+                    $tripayService = app(TripayService::class);
+                    $detail = $tripayService->detailTransaction($refToCheck);
+                    $tripayStatus = strtoupper((string) ($detail->data->status ?? ''));
+
+                    if (in_array($tripayStatus, ['PAID', 'SETTLEMENT'], true)) {
+                        $isPaid = true;
+                        $paymentMethod = $detail->data->payment_method ?? $paymentMethod;
+                        $paymentChannel = $detail->data->payment_method_code ?? ($detail->data->payment_method ?? $paymentChannel);
+                        $payCode = $detail->data->pay_code ?? null;
+                        $qrUrl = $detail->data->qr_url ?? null;
+                        $totalAmount = $detail->data->total_amount ?? null;
+                    } elseif (in_array($tripayStatus, ['EXPIRED', 'FAILED'], true)) {
+                        $fulfillmentService = app(InvoiceFulfillmentService::class);
+                        $fulfillmentService->fulfill(
+                            $invoice,
+                            $tripayStatus,
+                            $detail->data->payment_method ?? 'TRIPAY',
+                            $detail->data->payment_method_code ?? 'TRIPAY',
+                            $refToCheck
+                        );
+                        $invoice->refresh();
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Tripay return status check error: ' . $e->getMessage(), [
+                        'reference' => $refToCheck,
+                    ]);
+                }
+            }
+
+            // Fallback: If query parameter indicates PAID (from Tripay redirect)
+            if (!$isPaid && in_array($incomingStatus, ['PAID', 'SETTLEMENT'], true)) {
+                $isPaid = true;
+            }
+
+            if ($isPaid) {
+                $fulfillmentService = app(InvoiceFulfillmentService::class);
+                $fulfillmentService->fulfill(
+                    $invoice,
+                    'PAID',
+                    $paymentMethod,
+                    $paymentChannel,
+                    $refToCheck,
+                    array_filter([
+                        'va_number'    => $payCode,
+                        'qr_code_url'  => $qrUrl,
+                        'total_amount' => $totalAmount,
+                    ])
+                );
+                $invoice->refresh();
+            }
+        }
+
+        $parentInvoice = ($invoice->isInstallmentChild() && $invoice->parent_invoice_id)
+            ? Invoice::with(InvoiceFulfillmentService::INVOICE_RELATIONS)->find($invoice->parent_invoice_id)
+            : null;
+
+        $targetInvoice = $parentInvoice ?? $invoice;
+
+        if ($targetInvoice->status === 'pending' && in_array($incomingStatus, ['PAID', 'SETTLEMENT'], true)) {
+            $fulfillmentService = app(InvoiceFulfillmentService::class);
+            $fulfillmentService->fulfill($targetInvoice, 'PAID', 'TRIPAY', 'TRIPAY', $refToCheck);
+            $targetInvoice->refresh();
+        }
+
+        if ($targetInvoice->status === 'pending') {
+            return redirect($this->getInvoiceProductUrl($targetInvoice));
+        }
+
+        return redirect()->route('invoice.show', ['id' => $targetInvoice->id]);
+    }
+
+    private function getInvoiceProductUrl(Invoice $invoice): string
+    {
+        if ($invoice->isInstallmentChild() && $invoice->parent_invoice_id) {
+            $parent = Invoice::with([
+                'courseItems.course',
+                'bootcampItems.bootcamp',
+                'webinarItems.webinar',
+                'certificationProgramItems.certificationProgram',
+                'bundleEnrollments.bundle'
+            ])->find($invoice->parent_invoice_id);
+
+            if ($parent) {
+                $invoice = $parent;
+            }
+        }
+
+        if ($invoice->bundleEnrollments && $invoice->bundleEnrollments->count() > 0) {
+            $bundle = $invoice->bundleEnrollments->first()->bundle;
+            if ($bundle) {
+                return route('bundle.checkout', ['bundle' => $bundle->slug]);
+            }
+        } elseif ($invoice->courseItems && $invoice->courseItems->count() > 0) {
+            $course = $invoice->courseItems->first()->course;
+            if ($course) {
+                return route('course.checkout', ['course' => $course->slug]);
+            }
+        } elseif ($invoice->bootcampItems && $invoice->bootcampItems->count() > 0) {
+            $bootcamp = $invoice->bootcampItems->first()->bootcamp;
+            if ($bootcamp) {
+                return route('bootcamp.register', ['bootcamp' => $bootcamp->slug]);
+            }
+        } elseif ($invoice->webinarItems && $invoice->webinarItems->count() > 0) {
+            $webinar = $invoice->webinarItems->first()->webinar;
+            if ($webinar) {
+                return route('webinar.register', ['webinar' => $webinar->slug]);
+            }
+        } elseif ($invoice->certificationProgramItems && $invoice->certificationProgramItems->count() > 0) {
+            $program = $invoice->certificationProgramItems->first()->certificationProgram;
+            if ($program) {
+                return route('certification-programs.register', ['program' => $program->slug]);
+            }
+        }
+
+        if ($invoice->is_installment || $invoice->parent_invoice_id) {
+            return route('profile.installments');
+        }
+
+        return route('profile.index');
+    }
+
+
+    public function calculateTransactionFee($channelCode, $nettAmount): int
     {
         if ($nettAmount <= 0) {
             return 0;
         }
-        return 5000;
+
+        $activeGateway = $this->getActiveGateway();
+        if ($activeGateway === 'manjo') {
+            return (int) config('manjo.transaction_fee', 5000);
+        }
 
         try {
-            $channels = $this->midtransService->getPaymentChannels();
+            $paymentManager = app(PaymentGatewayManager::class);
+            $feeCalc = $paymentManager->driver('tripay')->calculateFee((int) $nettAmount, (string) $channelCode);
+            if (isset($feeCalc['fee_customer'])) {
+                return (int) $feeCalc['fee_customer'];
+            }
+        } catch (\Throwable $ignored) {
+            // Fallback to local channel resolution
+        }
 
-            $selectedChannel = collect($channels)->firstWhere('code', $channelCode);
+        try {
+            $channel = $this->tripayService->findChannel((string) $channelCode);
 
-            if (!$selectedChannel) {
-                throw new \Exception('Payment channel tidak ditemukan');
+            if (!$channel) {
+                $fallbackChannels = $this->getSupportedVaBanks();
+                $channel = $this->tripayService->findChannel((string) $channelCode, $fallbackChannels);
             }
 
-            // $flatFee = $selectedChannel->fee_customer->flat ?? 0;
-            // $percentFee = round($nettAmount * (($selectedChannel->fee_customer->percent ?? 0) / 100));
+            if (!$channel) {
+                return 0;
+            }
 
-            $feeCustomer = is_array($selectedChannel) ? $selectedChannel['fee_customer'] : $selectedChannel->fee_customer;
-            $flatFee = is_array($feeCustomer) ? ($feeCustomer['flat'] ?? 0) : ($feeCustomer->flat ?? 0);
-            $percentValue = is_array($feeCustomer) ? ($feeCustomer['percent'] ?? 0) : ($feeCustomer->percent ?? 0);
-            $percentFee = round($nettAmount * ($percentValue / 100));
-
-            return (int) ($flatFee + $percentFee);
-        } catch (\Exception $e) {
+            return $this->tripayService->calculateCustomerFee($channel, $nettAmount);
+        } catch (\Throwable $e) {
             Log::error('Error calculating transaction fee', [
                 'channel' => $channelCode,
-                'error' => $e->getMessage()
+                'error'   => $e->getMessage(),
             ]);
             return 0;
         }

@@ -600,7 +600,8 @@
         "promoValidateError": "Terjadi kesalahan saat memvalidasi kode promo",
         "invalidReferral": "Kode referral tidak valid",
         "referralValidateError": "Terjadi kesalahan saat memvalidasi kode referral",
-        "createInvoiceFailed": "Gagal membuat invoice."
+        "createInvoiceFailed": "Gagal membuat invoice.",
+        "selectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu!"
       }
     }
   },
@@ -806,6 +807,7 @@
       "location": "Lokasi",
       "quota": "Kuota",
       "duration": "Durasi",
+      "durationLabel": "Durasi",
       "deadline": "Deadline",
       "trusted": "Terpercaya",
       "secure": "Aman",
@@ -958,7 +960,8 @@
         "fileTooLarge": "File tidak boleh lebih dari 2MB",
         "fileMustBeImage": "File harus berupa gambar (JPG, PNG, dll)",
         "uploadAllProof": "Harap upload semua bukti yang diperlukan!",
-        "fileUploaded": "File berhasil diunggah."
+        "fileUploaded": "File berhasil diunggah.",
+        "selectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu!"
       }
     },
     "tabs": {
@@ -1238,7 +1241,8 @@
         "phoneRequired": "Profil Anda belum lengkap! Harap lengkapi nomor telepon terlebih dahulu.",
         "activeInstallmentOngoing": "Anda memiliki transaksi cicilan yang sedang aktif. Silakan lanjutkan pembayaran termin cicilan Anda.",
         "paymentUrlNotReceived": "Payment URL tidak diterima dari server.",
-        "fileUploaded": "File berhasil diunggah."
+        "fileUploaded": "File berhasil diunggah.",
+        "selectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu!"
       }
     }
   },
@@ -1525,7 +1529,8 @@
         "activeInstallmentNotice": "Anda memiliki transaksi cicilan yang sedang aktif. Silakan lanjutkan pembayaran termin cicilan Anda.",
         "installmentOverdue": "Batas waktu pembayaran cicilan telah terlewat.",
         "fullPaymentDisabled": "Anda memiliki cicilan aktif. Pembayaran penuh dinonaktifkan.",
-        "enterCodeRequired": "Masukkan kode {{type}} terlebih dahulu"
+        "enterCodeRequired": "Masukkan kode {{type}} terlebih dahulu",
+        "selectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu!"
       }
     }
   },
@@ -1594,6 +1599,8 @@
     },
     "detail": {
       "headTitle": "{{title}} - Program Sertifikasi",
+      "scholarshipBadge": "Program Beasiswa",
+      "regularBadge": "Program Reguler",
       "tabs": {
         "information": "Informasi",
         "informationShort": "Info",
@@ -1899,7 +1906,8 @@
       "promoInvalid": "Kode promo tidak valid",
       "promoError": "Terjadi kesalahan saat memvalidasi kode promo",
       "referralInvalid": "Kode referral tidak valid",
-      "referralError": "Terjadi kesalahan saat memvalidasi kode referral"
+      "referralError": "Terjadi kesalahan saat memvalidasi kode referral",
+      "mustSelectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu."
     },
     "scholarshipApply": {
       "headTitle": "Ajukan Beasiswa - {{title}}",
@@ -2183,7 +2191,8 @@
         "selectScheduleRequired": "Pilih jadwal private class terlebih dahulu.",
         "termsRequired": "Anda harus menyetujui syarat dan ketentuan.",
         "incompleteProfileToast": "Profil Anda belum lengkap! Harap lengkapi nomor telepon, instansi, dan kota domisili terlebih dahulu.",
-        "createInvoiceFailed": "Gagal membuat invoice pembayaran."
+        "createInvoiceFailed": "Gagal membuat invoice pembayaran.",
+        "selectPaymentChannel": "Silakan pilih metode pembayaran terlebih dahulu!"
       }
     }
   },

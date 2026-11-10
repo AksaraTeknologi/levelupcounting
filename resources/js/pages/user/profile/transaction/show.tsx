@@ -712,9 +712,17 @@ export default function TransactionShow({ invoice }: Props) {
 
                                 {invoice.status === 'pending' && !isExpired && invoice.invoice_url && (
                                     <>
-                                        <Button asChild size="lg" className="w-full sm:w-auto">
+                                        <Button asChild size="lg" className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">
                                             <a href={invoice.invoice_url} target="_blank" rel="noopener noreferrer">
+                                                <ExternalLink className="mr-2 h-4 w-4" />
                                                 {isInstallment ? t('transaction.payDPBtn') : t('transaction.continuePayment')}
+                                            </a>
+                                        </Button>
+
+                                        <Button asChild variant="outline" size="lg" className="w-full sm:w-auto border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400">
+                                            <a href="https://tripay.co.id/simulator" target="_blank" rel="noopener noreferrer">
+                                                <ExternalLink className="mr-2 h-4 w-4" />
+                                                Bayar via Simulator Tripay
                                             </a>
                                         </Button>
 

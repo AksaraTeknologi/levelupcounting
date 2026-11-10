@@ -16,7 +16,7 @@ interface Program {
 }
 
 export default function ScholarshipSuccess({ program }: { program: Program }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
 
     return (
         <UserLayout>

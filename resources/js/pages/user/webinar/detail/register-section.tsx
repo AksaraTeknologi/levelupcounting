@@ -20,7 +20,7 @@ interface Webinar {
 }
 
 export default function RegisterSection({ webinar }: { webinar: Webinar }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const { auth } = usePage<SharedData>().props;
 
     const isLoggedIn = !!auth.user;

@@ -25,6 +25,9 @@ class AppServiceProvider extends ServiceProvider
         // if (app()->environment('local')) {
         //     URL::forceScheme('https');
         // }
+        // if (config('app.url')) {
+        //     URL::forceRootUrl(config('app.url'));
+        // }
 
         // Daftarkan event listener reward referral
         \Illuminate\Support\Facades\Event::listen(

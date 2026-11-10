@@ -1,6 +1,6 @@
 import { parseISO } from 'date-fns';
 import InstallmentOptions, { ActiveInstallmentData, InstallmentTermOption } from '@/components/installment-options';
-import PaymentMethodSelector from '@/components/payment-method-selector';
+import PaymentChannelSelector, { CalculatedFeeData } from '@/components/payment-channel-selector';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -126,11 +126,14 @@ interface InvoiceData {
     id: string;
     discount_amount: number;
     nett_amount: number;
+    transaction_fee?: number;
     total_amount: number;
     payment_channel?: string;
+    payment_method?: string;
     discount_code_id?: string;
     discount_code_amount?: number;
     referral_code?: string;
+    affiliate_code?: string;
 }
 
 function parseList(items?: string | null): string[] {
@@ -230,8 +233,10 @@ export default function RegisterBootcamp({
     //     return flatFee + percentFee;
     // };
 
-    const [selectedChannel, setSelectedChannel] = useState<string>('qris');
-    const adminFee = isFree ? 0 : 5000;
+    const [selectedChannel, setSelectedChannel] = useState<string>('');
+    const [calculatedFee, setCalculatedFee] = useState<CalculatedFeeData | null>(null);
+    const [feeError, setFeeError] = useState<string | null>(null);
+    const adminFee = isFree || finalBootcampPrice === 0 ? 0 : (calculatedFee ? calculatedFee.fee_customer : 0);
     const totalPrice = isFree ? 0 : finalBootcampPrice + adminFee;
     const { data, setData, post, processing, errors, reset } = useForm<Required<RegisterForm>>({
         name: '',
@@ -490,6 +495,11 @@ export default function RegisterBootcamp({
             return;
         }
 
+        if (!isFree && !selectedChannel) {
+            toast.error('Silakan pilih metode/channel pembayaran terlebih dahulu!');
+            return;
+        }
+
         // 1. Jika belum login, lakukan registrasi / login terlebih dahulu
         if (!isLoggedIn) {
             if (!termsAccepted && !isFree) {
@@ -551,8 +561,10 @@ export default function RegisterBootcamp({
             id: bootcamp.id,
             discount_amount: originalDiscountAmount + promoDiscountAmount,
             nett_amount: finalBootcampPrice,
+            transaction_fee: adminFee,
             total_amount: totalPrice,
             payment_channel: selectedChannel,
+            payment_method: selectedChannel,
         };
 
         if (discountData?.valid && codeType === 'voucher') {
@@ -1396,9 +1408,17 @@ export default function RegisterBootcamp({
 
                                         <div className="space-y-2 pt-2">
                                             {pendingInvoice.invoice_url && formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
-                                                <Button asChild className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold" size="lg">
-                                                    <a href={pendingInvoice.invoice_url}>
+                                                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" size="lg">
+                                                    <a href={pendingInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
                                                         {t('bootcamp.register.btnContinuePayment')}
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            {formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
+                                                <Button asChild variant="outline" className="w-full border-indigo-400 text-indigo-700 hover:bg-indigo-50 font-semibold" size="lg">
+                                                    <a href="https://tripay.co.id/simulator" target="_blank" rel="noopener noreferrer">
+                                                        Bayar via Simulator Tripay
                                                     </a>
                                                 </Button>
                                             )}
@@ -1680,9 +1700,14 @@ export default function RegisterBootcamp({
 
                                                     {/* Payment Method Selector */}
                                                     <div className="mb-6">
-                                                        <PaymentMethodSelector
+                                                        <PaymentChannelSelector
                                                             selectedChannel={selectedChannel}
-                                                            onChannelChange={setSelectedChannel}
+                                                            onSelectChannel={setSelectedChannel}
+                                                            amount={finalBootcampPrice}
+                                                            onFeeCalculated={(feeData, err) => {
+                                                                setCalculatedFee(feeData);
+                                                                setFeeError(err);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -1725,7 +1750,15 @@ export default function RegisterBootcamp({
 
                                                         <div className="flex items-center justify-between text-sm">
                                                             <span className="text-gray-600 dark:text-gray-400">{t('bootcamp.register.transactionFee')}</span>
-                                                            <span className="font-semibold">Rp {adminFee.toLocaleString(i18n.language === 'id' ? 'id-ID' : 'en-US')}</span>
+                                                            <span className="font-semibold">
+                                                                {feeError ? (
+                                                                    <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                                ) : adminFee === 0 ? (
+                                                                    'Bebas Biaya'
+                                                                ) : (
+                                                                    `Rp ${adminFee.toLocaleString(i18n.language === 'id' ? 'id-ID' : 'en-US')}`
+                                                                )}
+                                                            </span>
                                                         </div>
 
                                                         <Separator />
@@ -1773,8 +1806,8 @@ export default function RegisterBootcamp({
                                                     <Button
                                                         type="submit"
                                                         size="lg"
-                                                        disabled={!termsAccepted || loading}
-                                                        className="w-full disabled:opacity-50"
+                                                        disabled={!termsAccepted || loading || (!isFree && !selectedChannel) || Boolean(feeError)}
+                                                        className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                     >
                                                         {loading ? (
                                                             <>
@@ -1982,9 +2015,14 @@ export default function RegisterBootcamp({
 
                                                 {/* Payment Method Selector */}
                                                 <div className="mb-6">
-                                                    <PaymentMethodSelector
+                                                    <PaymentChannelSelector
                                                         selectedChannel={selectedChannel}
-                                                        onChannelChange={setSelectedChannel}
+                                                        onSelectChannel={setSelectedChannel}
+                                                        amount={finalBootcampPrice}
+                                                        onFeeCalculated={(feeData, err) => {
+                                                            setCalculatedFee(feeData);
+                                                            setFeeError(err);
+                                                        }}
                                                     />
                                                 </div>
 
@@ -2027,7 +2065,15 @@ export default function RegisterBootcamp({
 
                                                     <div className="flex items-center justify-between text-sm">
                                                         <span className="text-gray-600 dark:text-gray-400">{t('bootcamp.register.transactionFee')}</span>
-                                                        <span className="font-semibold">Rp {adminFee.toLocaleString(i18n.language === 'id' ? 'id-ID' : 'en-US')}</span>
+                                                        <span className="font-semibold">
+                                                            {feeError ? (
+                                                                <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                            ) : adminFee === 0 ? (
+                                                                'Bebas Biaya'
+                                                            ) : (
+                                                                `Rp ${adminFee.toLocaleString(i18n.language === 'id' ? 'id-ID' : 'en-US')}`
+                                                            )}
+                                                        </span>
                                                     </div>
 
                                                     <Separator />
@@ -2075,8 +2121,8 @@ export default function RegisterBootcamp({
                                                 <Button
                                                     type="submit"
                                                     size="lg"
-                                                    disabled={!termsAccepted || loading}
-                                                    className="w-full disabled:opacity-50"
+                                                    disabled={!termsAccepted || loading || (!isFree && !selectedChannel) || Boolean(feeError)}
+                                                    className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                 >
                                                     {loading ? (
                                                         <>

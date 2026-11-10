@@ -22,6 +22,8 @@ Route::post('/xendit/callback', [InvoiceController::class, 'callbackXendit'])->n
 
 Route::post('/callback/tripay', [TripayCallbackController::class, 'handle'])->name('tripay.callback');
 
+Route::get('/payment/channels', [InvoiceController::class, 'paymentChannels'])->name('api.payment.channels');
+
 Route::post('/callback/midtrans', [MidtransCallbackController::class, 'handle'])->name('midtrans.callback');
 
 // Manjo Payment Gateways Callbacks

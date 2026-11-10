@@ -17,7 +17,7 @@
         .header {
             width: 100%;
             margin-bottom: 30px;
-            border-bottom: 2px solid #1B805B;
+            border-bottom: 2px solid #0360ED;
             padding-bottom: 20px;
         }
 
@@ -53,7 +53,7 @@
         .company-name {
             font-size: 24px;
             font-weight: bold;
-            color: #1B805B;
+            color: #0360ED;
             margin-bottom: 10px;
         }
 
@@ -72,7 +72,7 @@
         .invoice-code {
             font-size: 14px;
             font-weight: bold;
-            color: #1B805B;
+            color: #0360ED;
             margin-bottom: 5px;
         }
 
@@ -102,7 +102,7 @@
         }
 
         .items-table th {
-            background-color: #1B805B;
+            background-color: #0360ED;
             color: white;
             padding: 12px 8px;
             text-align: left;
@@ -140,7 +140,7 @@
         }
 
         .summary-table .total-row {
-            background-color: #1B805B;
+            background-color: #0360ED;
             color: white;
             font-weight: bold;
             font-size: 14px;

@@ -1,6 +1,6 @@
 import { parseISO } from 'date-fns';
 import InstallmentOptions, { ActiveInstallmentData, InstallmentTermOption } from '@/components/installment-options';
-import PaymentMethodSelector from '@/components/payment-method-selector';
+import PaymentChannelSelector, { CalculatedFeeData } from '@/components/payment-channel-selector';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -195,8 +195,9 @@ export default function CheckoutBundle({
     //     return flatFee + percentFee;
     // };
 
-    const [selectedChannel, setSelectedChannel] = useState<string>('qris');
-    const adminFee = 5000;
+    const [selectedChannel, setSelectedChannel] = useState<string>('');
+    const [calculatedFee, setCalculatedFee] = useState<CalculatedFeeData | null>(null);
+    const [feeError, setFeeError] = useState<string | null>(null);
 
     const [emailExists, setEmailExists] = useState(false);
     const [checkingEmail, setCheckingEmail] = useState(false);
@@ -210,7 +211,9 @@ export default function CheckoutBundle({
     const [referralData, setReferralData] = useState<{ valid: boolean; referrer?: { name: string } } | null>(null);
     const [referralLoading, setReferralLoading] = useState(false);
     const [referralError, setReferralError] = useState('');
-    const totalPrice = bundle.price + adminFee - (discountData?.discount_amount || 0);
+    const finalBundlePrice = Math.max(0, bundle.price - (discountData?.discount_amount || 0));
+    const adminFee = finalBundlePrice === 0 ? 0 : (calculatedFee ? calculatedFee.fee_customer : 0);
+    const totalPrice = finalBundlePrice + adminFee;
 
     useEffect(() => {
         if (!promoCode.trim()) {
@@ -434,6 +437,11 @@ export default function CheckoutBundle({
             return;
         }
 
+        if (!selectedChannel) {
+            toast.error(t('bundling.checkout.errors.selectPaymentChannel', 'Silakan pilih metode/channel pembayaran terlebih dahulu!'));
+            return;
+        }
+
         // 1. Jika belum login, lakukan registrasi / login terlebih dahulu
         if (!isLoggedIn) {
             if (!termsAccepted) {
@@ -484,6 +492,7 @@ export default function CheckoutBundle({
             transaction_fee: adminFee,
             total_amount: totalPrice,
             payment_channel: selectedChannel,
+            payment_method: selectedChannel,
         };
 
         if (discountData?.valid && codeType === 'voucher') {
@@ -1298,9 +1307,17 @@ export default function CheckoutBundle({
 
                                         <div className="space-y-2 pt-2">
                                             {pendingInvoice.invoice_url && formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
-                                                <Button asChild className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold" size="lg">
-                                                    <a href={pendingInvoice.invoice_url}>
+                                                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" size="lg">
+                                                    <a href={pendingInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
                                                         {t('bundling.checkout.btnContinuePayment')}
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            {formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
+                                                <Button asChild variant="outline" className="w-full border-indigo-400 text-indigo-700 hover:bg-indigo-50 font-semibold" size="lg">
+                                                    <a href="https://tripay.co.id/simulator" target="_blank" rel="noopener noreferrer">
+                                                        Bayar via Simulator Tripay
                                                     </a>
                                                 </Button>
                                             )}
@@ -1494,9 +1511,14 @@ export default function CheckoutBundle({
 
                                                     {/* Payment Method Selector */}
                                                     <div className="mb-6">
-                                                        <PaymentMethodSelector
+                                                        <PaymentChannelSelector
                                                             selectedChannel={selectedChannel}
-                                                            onChannelChange={setSelectedChannel}
+                                                            onSelectChannel={setSelectedChannel}
+                                                            amount={finalBundlePrice}
+                                                            onFeeCalculated={(feeData, err) => {
+                                                                setCalculatedFee(feeData);
+                                                                setFeeError(err);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -1537,7 +1559,15 @@ export default function CheckoutBundle({
 
                                                         <div className="flex items-center justify-between text-sm">
                                                             <span className="text-gray-600 dark:text-gray-400">{t('bundling.checkout.transactionFee')}</span>
-                                                            <span className="font-semibold">{rupiahFormatter.format(adminFee)}</span>
+                                                            <span className="font-semibold">
+                                                                {feeError ? (
+                                                                    <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                                ) : adminFee === 0 ? (
+                                                                    'Bebas Biaya'
+                                                                ) : (
+                                                                    rupiahFormatter.format(adminFee)
+                                                                )}
+                                                            </span>
                                                         </div>
 
                                                         <Separator />
@@ -1599,7 +1629,7 @@ export default function CheckoutBundle({
                                                     </div>
 
                                                     {/* Submit Button */}
-                                                    <Button type="submit" size="lg" disabled={!termsAccepted || loading} className="w-full disabled:opacity-50">
+                                                    <Button type="submit" size="lg" disabled={!termsAccepted || loading || !selectedChannel || Boolean(feeError)} className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                                                         {loading ? (
                                                             <>
                                                                 <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
@@ -1756,9 +1786,14 @@ export default function CheckoutBundle({
 
                                                 {/* Payment Method Selector */}
                                                 <div className="mb-6">
-                                                    <PaymentMethodSelector
+                                                    <PaymentChannelSelector
                                                         selectedChannel={selectedChannel}
-                                                        onChannelChange={setSelectedChannel}
+                                                        onSelectChannel={setSelectedChannel}
+                                                        amount={finalBundlePrice}
+                                                        onFeeCalculated={(feeData, err) => {
+                                                            setCalculatedFee(feeData);
+                                                            setFeeError(err);
+                                                        }}
                                                     />
                                                 </div>
 
@@ -1799,7 +1834,15 @@ export default function CheckoutBundle({
 
                                                     <div className="flex items-center justify-between text-sm">
                                                         <span className="text-gray-600 dark:text-gray-400">{t('bundling.checkout.transactionFee')}</span>
-                                                        <span className="font-semibold">{rupiahFormatter.format(adminFee)}</span>
+                                                        <span className="font-semibold">
+                                                            {feeError ? (
+                                                                <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                            ) : adminFee === 0 ? (
+                                                                'Bebas Biaya'
+                                                            ) : (
+                                                                rupiahFormatter.format(adminFee)
+                                                            )}
+                                                        </span>
                                                     </div>
 
                                                     <Separator />
@@ -1861,7 +1904,7 @@ export default function CheckoutBundle({
                                                 </div>
 
                                                 {/* Submit Button */}
-                                                <Button type="submit" size="lg" disabled={!termsAccepted || loading} className="w-full disabled:opacity-50">
+                                                <Button type="submit" size="lg" disabled={!termsAccepted || loading || !selectedChannel || Boolean(feeError)} className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                                                     {loading ? (
                                                         <>
                                                             <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>

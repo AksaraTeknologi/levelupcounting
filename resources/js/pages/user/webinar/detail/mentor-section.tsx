@@ -15,7 +15,7 @@ interface Webinar {
 }
 
 export default function MentorSection({ webinar }: { webinar: Webinar }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const getInitials = useInitials();
 
     if (!webinar.user) {

@@ -640,6 +640,7 @@
     "termOverdueBtn": "Cicilan ke-{{term}} — Batas Waktu Terlewat",
     "payOffWithAmount": "Lunasi Cicilan ({{amount}})",
     "payTermWithAmount": "Bayar Cicilan ke-{{term}} ({{amount}})",
-    "viewScheduleAndHistory": "Lihat Riwayat & Jadwal Cicilan"
+    "viewScheduleAndHistory": "Lihat Riwayat & Jadwal Cicilan",
+    "continuePayment": "Lanjutkan Pembayaran"
   }
 }

@@ -47,7 +47,7 @@ interface RegisterSectionProps {
 }
 
 export default function RegisterSection({ program, isEnrolled, scholarshipApplication }: RegisterSectionProps) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : id;
     const { auth } = usePage<SharedData>().props;
 
