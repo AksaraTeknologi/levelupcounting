@@ -30,25 +30,39 @@
         }
 
         .certificate-container {
-            width: 100%;
+            /* width: 100%; */
+            /* position: relative; */
+            /* padding-top: 40mm; */
+            /* margin-left: 48mm; */
+            width: 297mm;
+            height: 210mm;
             position: relative;
-            padding-top: 40mm;
-            margin-left: 48mm;
+            text-align: center;
         }
 
         .certificate-content {
-            width: 100%;
-            max-width: 260mm;
-            padding: 20px;
+            /* width: 100%; */
+            /* max-width: 260mm; */
+            /* padding: 20px; */
+            /* position: relative; */
+            /* display: flex; */
+            /* flex-direction: column; */
+            /* justify-content: space-between; */
+            width: 297mm;
+            height: 210mm;
             position: relative;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
+            text-align: center;
         }
 
-        /* .header {
-            margin-bottom: 15px;
-        } */
+        .header {
+            /* margin-bottom: 15px; */
+            position: absolute;
+            top: 39.5mm;
+            left: 0;
+            right: 0;
+            width: 100%;
+            text-align: center;
+        }
 
         /* .header-top {
             font-size: 38px;
@@ -64,10 +78,15 @@
         } */
 
         .certificate-title {
-            font-size: 130px;
-            font-weight: bold;
-            color: #1B805B;
-            text-transform: uppercase;
+            /* font-size: 130px; */
+            /* font-weight: bold; */
+            /* color: #1B805B; */
+            /* text-transform: uppercase; */
+            font-family: 'DejaVu Serif', 'Times New Roman', Georgia, serif;
+            font-size: 58pt;
+            font-weight: normal;
+            color: #12355d;
+            line-height: 1;
         }
 
         .certificate-subtitle {
@@ -78,32 +97,63 @@
         }
 
         .content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            margin: 2px 0;
+            /* flex: 1; */
+            /* display: flex; */
+            /* flex-direction: column; */
+            /* justify-content: center; */
+            /* margin: 2px 0; */
+            position: static;
+            padding-top: 115.5mm;
+            width: 215mm;
+            margin: 0 auto;
+            text-align: center;
         }
 
         .content-text {
-            font-size: 46px;
+            /* font-size: 46px; */
+            font-size: 13.5pt;
             font-style: italic;
-
+            color: #000000;
+            position: absolute;
+            top: 65mm;
+            left: 0;
+            right: 0;
+            width: 100%;
+            text-align: center;
         }
         .content-text2 {
-            font-size: 46px;
+            /* font-size: 46px; */
+            /* color: #000000; */
+            /* margin: 90px 0 90p 0; */
+            /* font-style: italic; */
+            font-size: 15.5pt;
             color: #000000;
-            margin: 90px 0 90p 0;
             font-style: italic;
+            position: absolute;
+            top: 77.5mm;
+            left: 0;
+            right: 0;
+            width: 100%;
+            text-align: center;
         }
 
         .participant-name {
-            font-size: 90px;
+            /* font-size: 90px; */
+            /* font-weight: bold; */
+            /* color: #1B805B; */
+            /* margin: 30 0 10 0 ; */
+            /* display: inline-block; */
+            /* min-width: 250px; */
+            font-size: 32pt;
             font-weight: bold;
-            color: #1B805B;
-            margin: 30 0 10 0 ;
-            display: inline-block;
-            min-width: 250px;
+            /* font-style: italic; */
+            color: #000000;
+            line-height: 1.1;
+            position: absolute;
+            top: 94.5mm;
+            left: 20mm;
+            right: 20mm;
+            text-align: center;
         }
 
         .program-name {
@@ -115,8 +165,11 @@
         }
 
         .program-description {
-            font-size: 46px;
-            
+            /* font-size: 46px; */
+            display: block;
+            font-size: 14pt;
+            line-height: 1.2;
+            color: #000000;
         }
 
         .description {
@@ -133,47 +186,72 @@
         }
 
         .footer {
-            position: relative;
-            margin-top: 150px;
-            height: 120px;
-            clear: both;
+            /* position: relative; */
+            /* margin-top: 150px; */
+            /* height: 120px; */
+            /* clear: both; */
+            position: static;
         }
 
         .signature-container {
-            float: left;
-            width: 50%;
-            text-align: left;
+            /* float: left; */
+            /* width: 50%; */
+            /* text-align: left; */
+            position: absolute;
+            top: 144.5mm;
+            left: 0;
+            right: 0;
+            width: 100%;
+            text-align: center;
         }
 
         .period-section {
-            float: right;
-            width: 50%;
-            text-align: right;
-            margin-top: 150px;
-            margin-right: 600px;
+            /* float: right; */
+            /* width: 50%; */
+            /* text-align: right; */
+            /* margin-top: 150px; */
+            /* margin-right: 600px; */
+            position: absolute;
+            top: 168.5mm;
+            left: 250.3mm;
+            width: 19.7mm;
+            text-align: center;
         }
 
         .qr-container {
-            margin-bottom: 16px;
+            /* margin-bottom: 16px; */
+            /* position: relative; */
+            /* text-align: right; */
+            margin: 0;
             position: relative;
-            text-align: right;
+            text-align: center;
         }
 
         .qr-code {
-            width: 150px;
-            height: 150px;
-            margin: 0 0 16px auto;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 4px;
-            background: white;
+            /* width: 150px; */
+            /* height: 150px; */
+            /* margin: 0 0 16px auto; */
+            /* border: 2px solid #e5e7eb; */
+            /* border-radius: 8px; */
+            /* padding: 4px; */
+            /* background: white; */
+            /* display: block; */
+            width: 19.7mm;
+            height: 19.7mm;
+            margin: 0 auto;
+            padding: 0;
+            border: none;
+            background: transparent;
             display: block;
         }
 
         .qr-placeholder {
-            width: 120px;
-            height: 120px;
-            margin: 0 auto 16px auto;
+            /* width: 120px; */
+            /* height: 120px; */
+            /* margin: 0 auto 16px auto; */
+            width: 19.7mm;
+            height: 19.7mm;
+            margin: 0 auto;
             border: 2px dashed #d1d5db;
             border-radius: 8px;
             background: #f9fafb;
@@ -193,28 +271,58 @@
         }
 
         .signature-space {
-            width: 150px;
-            height: 250px;
-            margin-bottom: 8px;
+            /* width: 150px; */
+            /* height: 250px; */
+            /* margin-bottom: 8px; */
+            /* position: relative; */
+            width: 90mm;
+            height: 20mm;
+            margin: 0 auto 1mm auto;
             position: relative;
+            overflow: visible;
+            text-align: center;
         }
 
         .signature-image {
-            max-width: 500px;
-            max-height: 500px;
+            /* max-width: 500px; */
+            /* max-height: 500px; */
+            position: absolute;
+            top: -5mm;
+            left: 0;
+            right: 0;
+            width: 88mm;
+            height: 34mm;
+            max-width: 88mm;
+            max-height: 34mm;
+            margin: 0 auto;
             object-fit: contain;
         }
 
         .signature-name {
-            font-size: 46px;
-            font-weight: bold;
-            margin-bottom: 2px;
-            text-decoration: underline;
+            /* font-size: 46px; */
+            /* font-weight: bold; */
+            /* margin-bottom: 2px; */
+            /* text-decoration: underline; */
+            font-size: 10.5pt;
+            font-weight: normal;
+            color: #000000;
+            display: inline-block;
+            min-width: 70.5mm;
+            padding-bottom: 1.2mm;
+            margin-bottom: 1.2mm;
+            border-bottom: 1.5pt solid #1e3653;
         }
 
         .signature-title,
         .signature-date {
-            font-size: 38px;
+            /* font-size: 38px; */
+            font-size: 10.5pt;
+            color: #000000;
+        }
+
+        .signature-date {
+            font-weight: bold !important;
+            margin-bottom: 1.5mm;
         }
 
         /* Clearfix untuk footer */
@@ -531,47 +639,46 @@
     </div>
     
     <div class="content-text2">
-        Sertifikat ini diberikan kepada :
+        {{-- Sertifikat ini diberikan kepada : --}}
+        Diberikan Kepada :
     </div>
     
     <div class="participant-name">
         {{ $data['participant_name'] }}
     </div>
 
-    <div class="program-description">
+    {{-- <div class="program-description">
         @if ($certificate->webinar_id)
             Telah aktif berpartisipasi dan menyelesaikan
         @elseif ($certificate->bootcamp_id)
-            Sebagai peserta yang mengikuti pelatihan dan lulus 
+            Sebagai peserta yang mengikuti pelatihan dan lulus
         @else
             Telah menyelesaikan kelas online
         @endif
-    </div>
-    <div class="program-description" >
-    @if ($certificate->webinar_id && $certificate->webinar)
-        {{ $certificate->description }}<br> pada {{ \Carbon\Carbon::parse($certificate->webinar->start_time)->locale('id')->translatedFormat('d F Y') }}.
-    @elseif ($certificate->bootcamp_id && $certificate->bootcamp)
-        {{ $certificate->description }}<br> pada {{ \Carbon\Carbon::parse($certificate->bootcamp->start_date)->locale('id')->translatedFormat('d F Y') }}{{ $certificate->bootcamp->end_date ? ' - ' . \Carbon\Carbon::parse($certificate->bootcamp->end_date)->locale('id')->translatedFormat('d F Y') : '' }}.
-    @elseif ($certificate->issued_date)
-        {{ $certificate->description }} <br> pada {{ \Carbon\Carbon::parse($data['participant_issued_at'])->locale('id')->translatedFormat('d F Y') }}.
-
-    @else
-           {{ $certificate->description }} pada {{ \Carbon\Carbon::parse($certificate->issued_date)->locale('id')->translatedFormat('d F Y') }}. 
-    @endif
-</div>
+    </div> <div class="program-description">@if ($certificate->webinar_id && $certificate->webinar){{ $certificate->description }}<br> pada {{ \Carbon\Carbon::parse($certificate->webinar->start_time)->locale('id')->translatedFormat('d F Y') }}.@elseif ($certificate->bootcamp_id && $certificate->bootcamp){{ $certificate->description }}<br> pada {{ \Carbon\Carbon::parse($certificate->bootcamp->start_date)->locale('id')->translatedFormat('d F Y') }}{{ $certificate->bootcamp->end_date ? ' - ' . \Carbon\Carbon::parse($certificate->bootcamp->end_date)->locale('id')->translatedFormat('d F Y') : '' }}.@elseif ($certificate->issued_date){{ $certificate->description }} <br> pada {{ \Carbon\Carbon::parse($data['participant_issued_at'])->locale('id')->translatedFormat('d F Y') }}.@else{{ $certificate->description }} pada {{ \Carbon\Carbon::parse($certificate->issued_date)->locale('id')->translatedFormat('d F Y') }}.@endif</div> --}}
+    @php
+        $formattedDescription = e($certificate->description ?? '');
+        $formattedDescription = preg_replace('/&lt;(b|strong)&gt;(.*?)&lt;\/(b|strong)&gt;/is', '<strong>$2</strong>', $formattedDescription);
+        $formattedDescription = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $formattedDescription);
+        $formattedDescription = preg_replace('/&lt;(i|em)&gt;(.*?)&lt;\/(i|em)&gt;/is', '<em>$2</em>', $formattedDescription);
+        $formattedDescription = str_replace("\t", '&nbsp;&nbsp;&nbsp;&nbsp;', $formattedDescription);
+        $formattedDescription = preg_replace_callback('/ {2,}/', fn($m) => str_repeat('&nbsp;', strlen($m[0])), $formattedDescription);
+        $formattedDescription = nl2br($formattedDescription);
+    @endphp
+    <div class="program-description">{!! $formattedDescription !!}</div>
 </div>
             {{-- Footer --}}
             <div class="footer">
                 <div class="signature-container">
                     <div class="signature-date" style="font-weight:500">
-                        Batu, {{ \Carbon\Carbon::parse($certificate->issued_date)->locale('id')->translatedFormat('d F Y') }}
+                        Batu, {{ \Carbon\Carbon::parse($certificate->issued_date ?? $data['participant_issued_at'] ?? now())->locale('id')->translatedFormat('d F Y') }}
                     </div>
                     <div class="signature-space">
                         @if ($certificate->sign && $certificate->sign->image)
                             <img src="{{ \App\Services\CertificatePdfService::resolveImageUrl($certificate->sign->image) }}" alt="Tanda Tangan"
                                 class="signature-image">
                         @else
-                            <div style="color: #9ca3af; font-style: italic; font-size: 10px;">Tanda Tangan</div>
+                            {{-- <div style="color: #9ca3af; font-style: italic; font-size: 10px;">Tanda Tangan</div> --}}
                         @endif
                     </div>
 
@@ -604,16 +711,16 @@
                             </div>
                         @endif
 
-                        @if ($certificateUrl)
+                        {{-- @if ($certificateUrl)
                             <div class="certificate-url">{{ $certificateUrl }}</div>
                         @else
                             <div class="certificate-url">
                                 https://levelupaccounting.id/certificate/{{ $data['certificate_code'] }}
                             </div>
-                        @endif
+                        @endif --}}
                     </div>
 
-                    <div class="certificate-period">{{ $certificate->period }}</div>
+                    {{-- <div class="certificate-period">{{ $certificate->period }}</div> --}}
                 </div>
             </div>
         </div>

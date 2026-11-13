@@ -16,8 +16,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Head, router } from '@inertiajs/react';
 import { addYears, format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { Award, CalendarFold, Check, ChevronDownIcon, ChevronsUpDown, Trash, Plus } from 'lucide-react';
-import { useState } from 'react';
+import { Award, Bold, CalendarFold, Check, ChevronDownIcon, ChevronsUpDown, Trash, Plus } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -99,6 +99,42 @@ export default function CreateCertificate({ designs, signs, courses, bootcamps, 
     const [isSignPopoverOpen, setIsSignPopoverOpen] = useState(false);
     const [isProgramPopoverOpen, setIsProgramPopoverOpen] = useState(false);
     const [openIssuedCalendar, setOpenIssuedCalendar] = useState(false);
+    const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+    const handleToggleBold = () => {
+        const textarea = descriptionTextareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentValue = form.getValues('description') ?? '';
+        const selectedText = currentValue.substring(start, end);
+
+        let newValue = currentValue;
+        let newStart = start;
+        let newEnd = end;
+
+        if (selectedText.startsWith('**') && selectedText.endsWith('**') && selectedText.length >= 4) {
+            const unwrapped = selectedText.slice(2, -2);
+            newValue = currentValue.substring(0, start) + unwrapped + currentValue.substring(end);
+            newEnd = start + unwrapped.length;
+        } else if (start >= 2 && currentValue.substring(start - 2, start) === '**' && currentValue.substring(end, end + 2) === '**') {
+            newValue = currentValue.substring(0, start - 2) + selectedText + currentValue.substring(end + 2);
+            newStart = start - 2;
+            newEnd = end - 2;
+        } else {
+            const wrapped = `**${selectedText}**`;
+            newValue = currentValue.substring(0, start) + wrapped + currentValue.substring(end);
+            newStart = start + 2;
+            newEnd = end + 2;
+        }
+
+        form.setValue('description', newValue, { shouldDirty: true });
+        requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(newStart, newEnd);
+        });
+    };
 
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -255,14 +291,40 @@ export default function CreateCertificate({ designs, signs, courses, bootcamps, 
                                 name="description"
                                 render={({ field }) => (
                                     <FormItem>
-                                        <FormLabel>Deskripsi</FormLabel>
+                                        <div className="flex items-center justify-between">
+                                            <FormLabel>Deskripsi</FormLabel>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleToggleBold}
+                                                className="h-7 gap-1 px-2 text-xs"
+                                                title="Bold (Ctrl+B)"
+                                            >
+                                                <Bold className="h-3.5 w-3.5" />
+                                                Bold
+                                            </Button>
+                                        </div>
                                         <Textarea
                                             {...field}
+                                            ref={(el) => {
+                                                field.ref(el);
+                                                descriptionTextareaRef.current = el;
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+                                                    e.preventDefault();
+                                                    handleToggleBold();
+                                                }
+                                            }}
                                             value={field.value ?? ''}
                                             className="w-full rounded border p-2"
                                             placeholder="Masukkan deskripsi sertifikat"
                                             autoComplete="off"
                                         />
+                                        <FormDescription className="text-xs">
+                                            Blok teks lalu tekan <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px]">Ctrl+B</kbd> atau klik tombol <strong>Bold</strong> untuk menebalkan teks (`**teks**`).
+                                        </FormDescription>
                                         <FormMessage />
                                     </FormItem>
                                 )}

@@ -49,9 +49,9 @@ class CertificatePdfService
             $dummyData = [
                 'participant_name' => 'Level Up Accounting',
                 'certificate_code' => 'LUC-25AHBEFJ',
-                'participant_issued_at' => now(),
+                'participant_issued_at' => $certificate->issued_date ?? now(),
                 'certificate_number' => '0001',
-                'completion_date' => now()->format('d F Y'),
+                'completion_date' => ($certificate->issued_date ? \Carbon\Carbon::parse($certificate->issued_date) : now())->format('d F Y'),
                 'program_name' => $this->getProgramName($certificate),
                 'program_type' => $this->getProgramType($certificate)
             ];
@@ -85,9 +85,9 @@ class CertificatePdfService
             $participantData = [
                 'participant_name' => $participant->user->name,
                 'certificate_code' => $participant->certificate_code,
-                'participant_issued_at' => $participant->issued_date,
+                'participant_issued_at' => $certificate->issued_date ?? $participant->created_at,
                 'certificate_number' => str_pad($participant->certificate_number, 4, '0', STR_PAD_LEFT),
-                'completion_date' => $participant->created_at->format('d F Y'),
+                'completion_date' => ($certificate->issued_date ? \Carbon\Carbon::parse($certificate->issued_date) : $participant->created_at)->format('d F Y'),
                 'program_name' => $this->getProgramName($certificate),
                 'program_type' => $this->getProgramType($certificate)
             ];
