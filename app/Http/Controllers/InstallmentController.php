@@ -16,7 +16,7 @@ use App\Models\ProductInstallmentTerm;
 use App\Models\Webinar;
 use App\Services\MidtransService;
 use App\Services\TripayService;
-use App\Traits\WablasTrait;
+use App\Traits\MessaraTrait;
 use Carbon\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Http\Request;
@@ -28,7 +28,7 @@ use Inertia\Inertia;
 
 class InstallmentController extends Controller
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     protected $midtransService;
     protected $tripayService;
@@ -640,7 +640,7 @@ class InstallmentController extends Controller
             if (!$sent) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Gagal mengirim pengingat WhatsApp melalui gateway Wablas. Pastikan koneksi WhatsApp terhubung.'
+                    'message' => 'Gagal mengirim pengingat WhatsApp melalui gateway Messara. Pastikan koneksi WhatsApp terhubung.'
                 ], 422);
             }
 

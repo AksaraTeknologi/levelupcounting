@@ -25,7 +25,7 @@ use App\Models\Webinar;
 use App\Services\TripayService;
 use App\Services\Payment\PaymentGatewayManager;
 use App\Services\InvoiceFulfillmentService;
-use App\Traits\WablasTrait;
+use App\Traits\MessaraTrait;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -48,7 +48,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InvoiceController extends Controller
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     protected $tripayService;
     protected $midtransService;
@@ -2044,7 +2044,7 @@ class InvoiceController extends Controller
 
             DB::commit();
 
-            // Kirim notifikasi WhatsApp via Wablas setelah transaksi berhasil di-approve
+            // Kirim notifikasi WhatsApp via Messara setelah transaksi berhasil di-approve
             try {
                 $this->sendWhatsAppNotification($invoice);
             } catch (\Exception $e) {

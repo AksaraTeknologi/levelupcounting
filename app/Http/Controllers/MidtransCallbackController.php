@@ -11,7 +11,7 @@ use App\Mail\SendEmail;
 use App\Models\AffiliateEarning;
 use App\Models\User;
 use Illuminate\Support\Facades\Mail;
-use App\Traits\WablasTrait;
+use App\Traits\MessaraTrait;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +20,7 @@ use App\Services\PaymentSettlementService;
 
 class MidtransCallbackController extends Controller
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     protected $midtransService;
     protected $settlementService;
