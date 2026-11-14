@@ -404,55 +404,60 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
         <UserLayout>
             <Head title={bootcampData.title} />
 
-            {/* Hero Section - No changes */}
-            <section className="to-background from-background via-tertiary dark:via-background dark:to-background relative bg-gradient-to-b py-12 text-gray-900 dark:text-white">
-                <div className="pointer-events-none absolute top-1/2 left-1/2 z-0 flex -translate-x-1/2 -translate-y-1/2 animate-spin items-center gap-8 duration-[10s]">
-                    <div className="bg-primary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                    <div className="bg-secondary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                </div>
-                <div className="relative mx-auto max-w-7xl px-4 text-center">
-                    <Button className="top-0 left-4 mb-4 rounded-full md:absolute md:mb-0" variant="secondary" asChild>
+            {/* Clean Header Section */}
+            <section className="mx-auto w-full max-w-7xl px-4 pt-6 pb-6">
+                <div className="mb-4">
+                    <Button variant="ghost" size="sm" className="gap-2 px-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" asChild>
                         <Link href="/profile/my-bootcamps">
-                            <ArrowLeft /> {t('bootcamps.detail.backToBootcamps')}
+                            <ArrowLeft className="h-4 w-4" /> {t('bootcamps.detail.backToBootcamps')}
                         </Link>
                     </Button>
-                    <div className="col-span-2">
-                        <div className="flex flex-col items-center justify-center md:flex-row md:gap-4">
-                            <span className="text-primary border-primary bg-background mb-4 w-fit rounded-full border bg-gradient-to-t from-[#D9E5FF] to-white px-4 py-1 text-sm font-medium shadow-xs">
-                                {t('bootcamps.detail.enrolledIn', {
-                                    date: new Date(bootcampItem.created_at).toLocaleDateString(dateLocale, {
-                                        month: 'long',
-                                        year: 'numeric',
-                                    }),
-                                })}
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
+                            {t('bootcamps.detail.enrolledIn', {
+                                date: new Date(bootcampItem.created_at).toLocaleDateString(dateLocale, {
+                                    month: 'long',
+                                    year: 'numeric',
+                                }),
+                            })}
+                        </span>
+                        {hasCertificate && (
+                            <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                <Award size={14} />
+                                {t('bootcamps.detail.certAvailable')}
                             </span>
-                            {hasCertificate && (
-                                <span className="mb-4 flex w-fit items-center gap-2 rounded-full border border-green-800 bg-green-100 px-4 py-1 text-sm font-medium text-green-800 shadow-xs">
-                                    <Award size={16} />
-                                    {t('bootcamps.detail.certAvailable')}
-                                </span>
-                            )}
-                            {allAttendanceVerified && (
-                                <span className="mb-4 flex w-fit items-center gap-2 rounded-full border border-blue-800 bg-blue-100 px-4 py-1 text-sm font-medium text-blue-800 shadow-xs">
-                                    <CheckCircle size={16} />
-                                    {t('bootcamps.detail.attendanceComplete')}
-                                </span>
-                            )}
-                        </div>
+                        )}
+                        {allAttendanceVerified && (
+                            <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-300">
+                                <CheckCircle size={14} className="text-emerald-600" />
+                                {t('bootcamps.detail.attendanceComplete')}
+                            </span>
+                        )}
+                    </div>
 
-                        <h1 className="mx-auto mb-4 max-w-2xl text-4xl leading-tight font-bold italic sm:text-5xl">{bootcampData.title}</h1>
+                    <h1 className="text-2xl leading-snug font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+                        {bootcampData.title}
+                    </h1>
 
-                        <p className="mb-6 text-lg text-gray-600 dark:text-gray-400">{bootcampData.description}</p>
+                    {bootcampData.description && (
+                        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base dark:text-gray-400">
+                            {bootcampData.description}
+                        </p>
+                    )}
 
-                        <div className="flex flex-col items-center justify-center gap-4 w-full">
+                    {(isSuspended || !hasActiveAccess || (isInstallment && !isFullyPaid)) && (
+                        <div className="mt-5 border-t border-gray-100 pt-5 dark:border-zinc-800">
                             {isSuspended ? (
-                                <span className="font-semibold text-red-600">
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                                     {t('bootcamps.detail.suspendedNotice')}
-                                </span>
+                                </div>
                             ) : !hasActiveAccess ? (
-                                <span className="font-semibold text-red-600">
+                                <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
                                     {t('bootcamps.detail.unpaidNotice')}
-                                </span>
+                                </div>
                             ) : isInstallment && !isFullyPaid ? (
                                 <div className="w-full">
                                     <ProfileInstallmentAction
@@ -469,7 +474,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                 </div>
                             ) : null}
                         </div>
-                    </div>
+                    )}
                 </div>
             </section>
 
@@ -477,40 +482,38 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                 <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                     <div className="col-span-2 space-y-6">
                         {isCompleted && (hasCertificate || !offersCertificate) && (
-                            <section className="mx-auto mb-8 w-full max-w-7xl px-4">
-                                <div className="border-gradient-to-r rounded-2xl border bg-gradient-to-br from-green-50 via-blue-50 to-blue-200 p-8 shadow-lg dark:border-green-800 dark:from-green-900/20 dark:via-blue-900/20 dark:to-purple-900/20">
-                                    <div>
-                                        <div className="mb-4 flex">
-                                            <div className="flex items-center gap-2 rounded-full bg-gradient-to-r from-green-400 to-blue-500 px-6 py-2 text-white shadow-lg">
-                                                <Award size={24} />
-                                                <span className="font-bold">{t('bootcamps.detail.congratsBadge')}</span>
-                                            </div>
+                            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                        <Award size={20} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="mb-1.5 inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                            <span>{t('bootcamps.detail.congratsBadge')}</span>
                                         </div>
-
-                                        <h2 className="mb-4 bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-2xl font-bold text-transparent">
+                                        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                                             {t('bootcamps.detail.congratsTitle')}
                                         </h2>
-
-                                        <div className="mx-auto max-w-3xl space-y-3 text-gray-700 dark:text-gray-300">
-                                            <p className="leading-relaxed">
-                                                {t('bootcamps.detail.congratsDesc', { title: bootcampData.title })}
-                                            </p>
-                                        </div>
+                                        <p className="mt-1 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                                            {t('bootcamps.detail.congratsDesc', { title: bootcampData.title })}
+                                        </p>
                                     </div>
                                 </div>
-                            </section>
+                            </div>
                         )}
 
                         {/* Attendance Section with Recording */}
                         {hasActiveAccess && bootcampData.schedules && bootcampData.schedules.length > 0 && (
-                            <div className="rounded-xl border border-purple-200 bg-gradient-to-br from-purple-50 to-pink-50 p-6 dark:border-purple-800 dark:from-purple-900/20 dark:to-pink-900/20">
-                                <div className="mb-4 flex items-center gap-3">
-                                    <Upload className="text-purple-600" size={24} />
+                            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <div className="mb-5 flex items-center gap-3">
+                                    <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+                                        <Upload size={20} />
+                                    </div>
                                     <div>
-                                        <h2 className="text-xl font-bold text-purple-800 dark:text-purple-200">
+                                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                                             {requiresReview ? t('bootcamps.detail.attendanceAndRecordingTitle') : t('bootcamps.detail.recordingOnlyTitle')}
                                         </h2>
-                                        <p className="text-sm text-purple-600 dark:text-purple-400">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">
                                             {requiresReview
                                                 ? t('bootcamps.detail.attendanceSubtitleReview', { verified: verifiedAttendances, total: totalSchedules })
                                                 : t('bootcamps.detail.attendanceSubtitleNoReview')}
@@ -518,7 +521,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                     </div>
                                 </div>
 
-                                <div className="space-y-4">
+                                <div className="space-y-3">
                                     {bootcampData.schedules.map((schedule, idx) => {
                                         const attendance = getAttendanceForSchedule(schedule.id);
                                         const showForm = showUploadForms[schedule.id];
@@ -526,7 +529,6 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                         const scheduleDate = new Date(schedule.schedule_date);
                                         const isPast = scheduleDate < new Date();
 
-                                        // ✅ TAMBAHAN: Get video info
                                         const videoId = schedule.recording_url ? getYoutubeId(schedule.recording_url) : '';
                                         const embedUrl = videoId ? `https://www.youtube.com/embed/${videoId}` : '';
 
@@ -535,22 +537,24 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                 key={schedule.id}
                                                 className={`rounded-lg border p-4 ${
                                                     attendance?.verified
-                                                        ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
+                                                        ? 'border-emerald-200 bg-emerald-50/40 dark:border-emerald-900/50 dark:bg-emerald-950/20'
                                                         : attendance
-                                                          ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-900/20'
-                                                          : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+                                                          ? 'border-amber-200 bg-amber-50/40 dark:border-amber-900/50 dark:bg-amber-950/20'
+                                                          : 'border-gray-200 bg-gray-50/50 dark:border-zinc-800 dark:bg-zinc-800/40'
                                                 }`}
                                             >
-                                                <div className="flex items-center justify-between">
+                                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                                     <div className="flex-1">
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                                             <div className="flex items-center gap-2">
-                                                                <Calendar size={16} className="text-purple-600" />
-                                                                <span className="font-medium">{t('bootcamps.detail.meeting', { index: idx + 1 })}</span>
+                                                                <Calendar size={15} className="text-primary" />
+                                                                <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                                                                    {t('bootcamps.detail.meeting', { index: idx + 1 })}
+                                                                </span>
                                                             </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <Clock size={14} className="text-gray-500" />
-                                                                <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                            <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                                                                <Clock size={13} />
+                                                                <span>
                                                                     {scheduleDate.toLocaleDateString(dateLocale, {
                                                                         day: '2-digit',
                                                                         month: 'short',
@@ -563,13 +567,13 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                         {attendance && requiresReview && (
                                                             <div className="mt-2 flex items-center gap-2">
                                                                 {attendance.verified ? (
-                                                                    <span className="flex items-center gap-1 text-sm text-green-600">
-                                                                        <CheckCircle size={14} />
+                                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                                                        <CheckCircle size={13} />
                                                                         {t('bootcamps.detail.verified')}
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="flex items-center gap-1 text-sm text-yellow-600">
-                                                                        <Clock size={14} />
+                                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                                                                        <Clock size={13} />
                                                                         {t('bootcamps.detail.waitingVerification')}
                                                                     </span>
                                                                 )}
@@ -617,39 +621,40 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                     )}
                                                 </div>
 
-                                                {/* ✅ TAMBAHAN: Recording Video Section */}
+                                                {/* Recording Video Section */}
                                                 {schedule.recording_url && embedUrl && (
-                                                    <div className="mt-4 space-y-2">
-                                                        <div className="flex items-center gap-2 text-sm font-medium text-blue-800 dark:text-blue-200">
-                                                            <ExternalLink size={14} />
-                                                            <span>{t('bootcamps.detail.recordingHeading')}</span>
+                                                    <div className="mt-4 space-y-2 border-t border-gray-200/70 pt-3 dark:border-zinc-700/60">
+                                                        <div className="flex items-center justify-between">
+                                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                                                {t('bootcamps.detail.recordingHeading')}
+                                                            </span>
+                                                            <a
+                                                                href={schedule.recording_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-primary inline-flex items-center gap-1 text-xs font-medium hover:underline"
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                                {t('bootcamps.detail.openInYoutube')}
+                                                            </a>
                                                         </div>
                                                         <div className="w-full">
                                                             <iframe
-                                                                className="aspect-video w-full rounded-lg border"
+                                                                className="aspect-video w-full rounded-lg border border-gray-200 dark:border-zinc-700"
                                                                 src={embedUrl}
                                                                 title={`Recording Pertemuan ${idx + 1}`}
                                                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                                                 allowFullScreen
                                                             />
                                                         </div>
-                                                        <a
-                                                            href={schedule.recording_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
-                                                        >
-                                                            <ExternalLink size={12} />
-                                                            {t('bootcamps.detail.openInYoutube')}
-                                                        </a>
                                                     </div>
                                                 )}
 
                                                 {/* Upload Form */}
                                                 {requiresReview && showForm && (
-                                                    <div className="mt-4 space-y-3 rounded border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+                                                    <div className="mt-4 space-y-3 rounded-lg border border-gray-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
                                                         <div className="flex items-center justify-between">
-                                                            <h5 className="font-medium">{t('bootcamps.detail.uploadProofTitle')}</h5>
+                                                            <h5 className="text-sm font-semibold">{t('bootcamps.detail.uploadProofTitle')}</h5>
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
@@ -696,7 +701,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                                 value={notes[schedule.id] || ''}
                                                                 onChange={(e) => setNotes((prev) => ({ ...prev, [schedule.id]: e.target.value }))}
                                                                 placeholder={t('bootcamps.detail.notesPlaceholder')}
-                                                                className="w-full rounded-lg border border-gray-300 p-2 text-sm focus:border-purple-500 focus:ring-1 focus:ring-purple-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                                className="focus:border-primary focus:ring-primary w-full rounded-lg border border-gray-300 bg-white p-2 text-sm focus:ring-1 focus:outline-none dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
                                                                 rows={2}
                                                                 maxLength={500}
                                                             />
@@ -721,7 +726,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                             <Button
                                                                 onClick={() => handleUploadAttendance(schedule.id)}
                                                                 disabled={!selectedFiles[schedule.id] || isUploading}
-                                                                className="flex-1 bg-purple-600 hover:bg-purple-700"
+                                                                className="flex-1"
                                                             >
                                                                 {isUploading ? t('bootcamps.detail.btnUploading') : t('bootcamps.detail.btnUploadProof')}
                                                             </Button>
@@ -735,10 +740,10 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                         <img
                                                             src={`/storage/${attendance.attendance_proof}`}
                                                             alt="Bukti Kehadiran"
-                                                            className="mx-auto max-h-24 rounded border shadow-sm"
+                                                            className="mx-auto max-h-24 rounded border border-gray-200 dark:border-zinc-700"
                                                         />
                                                         {attendance.notes && (
-                                                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                                                            <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                                                                 Catatan: {attendance.notes}
                                                             </p>
                                                         )}
@@ -750,19 +755,19 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                 </div>
 
                                 {requiresReview && totalSchedules > 0 && (
-                                    <div className="mt-4 rounded-lg bg-purple-100 p-3 dark:bg-purple-800/50">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                                    <div className="mt-4 rounded-lg border border-gray-100 bg-gray-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                                                 {t('bootcamps.detail.attendanceProgress', { verified: verifiedAttendances, total: totalSchedules })}
                                             </span>
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-2 w-32 rounded-full bg-purple-200 dark:bg-purple-700">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="h-2 w-28 overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-700">
                                                     <div
-                                                        className="h-2 rounded-full bg-purple-600 transition-all"
+                                                        className="bg-primary h-full rounded-full transition-all"
                                                         style={{ width: `${(verifiedAttendances / totalSchedules) * 100}%` }}
                                                     />
                                                 </div>
-                                                <span className="text-sm font-medium text-purple-800 dark:text-purple-200">
+                                                <span className="text-xs font-semibold text-gray-900 dark:text-white">
                                                     {Math.round((verifiedAttendances / totalSchedules) * 100)}%
                                                 </span>
                                             </div>
@@ -774,49 +779,47 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
 
                         {/* Submission Section */}
                         {hasActiveAccess && needsSubmission && allAttendanceVerified && isCompleted && (
-                            <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-cyan-50 p-6 dark:border-blue-800 dark:from-blue-900/20 dark:to-cyan-900/20">
+                            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <div className="mb-4 flex items-center gap-3">
-                                    <LinkIcon className="text-blue-600" size={24} />
+                                    <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+                                        <LinkIcon size={18} />
+                                    </div>
                                     <div>
-                                        <h2 className="text-xl font-bold text-blue-800 dark:text-blue-200">{t('bootcamps.detail.projectSubmission')}</h2>
-                                        <p className="text-sm text-blue-600 dark:text-blue-400">{t('bootcamps.detail.projectSubmissionDesc')}</p>
+                                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.projectSubmission')}</h2>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('bootcamps.detail.projectSubmissionDesc')}</p>
                                     </div>
                                 </div>
 
                                 {hasSubmission ? (
-                                    <div className="space-y-4">
-                                        <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-800 dark:bg-green-900/20">
-                                            <div className="mb-2 flex items-center gap-2">
-                                                <CheckCircle size={20} className="text-green-600" />
-                                                <span className="font-medium text-green-800 dark:text-green-200">{t('bootcamps.detail.submissionVerified')}</span>
-                                            </div>
-                                            <a
-                                                href={bootcampItem.submission!}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-sm break-all text-blue-600 hover:underline"
-                                            >
-                                                {bootcampItem.submission}
-                                            </a>
+                                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                                        <div className="mb-1.5 flex items-center gap-2">
+                                            <CheckCircle size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                            <span className="text-sm font-medium text-emerald-800 dark:text-emerald-200">{t('bootcamps.detail.submissionVerified')}</span>
                                         </div>
+                                        <a
+                                            href={bootcampItem.submission!}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-primary text-sm break-all hover:underline"
+                                        >
+                                            {bootcampItem.submission}
+                                        </a>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        <div className="rounded-lg bg-blue-100 p-4 dark:bg-blue-800/50">
-                                            <p className="text-center text-blue-800 dark:text-blue-200">
-                                                {t('bootcamps.detail.submissionPrompt')}
-                                            </p>
+                                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3.5 text-sm text-gray-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-gray-300">
+                                            {t('bootcamps.detail.submissionPrompt')}
                                         </div>
 
                                         {!showSubmissionForm ? (
-                                            <Button onClick={() => setShowSubmissionForm(true)} className="w-full bg-blue-600 hover:bg-blue-700">
+                                            <Button onClick={() => setShowSubmissionForm(true)} className="w-full">
                                                 <Upload size={16} className="mr-2" />
                                                 {t('bootcamps.detail.btnUploadProject')}
                                             </Button>
                                         ) : (
-                                            <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+                                            <div className="space-y-4 rounded-lg border border-gray-200 bg-gray-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-800/40">
                                                 <div className="flex items-center justify-between">
-                                                    <h4 className="font-medium">{t('bootcamps.detail.submissionFormTitle')}</h4>
+                                                    <h4 className="text-sm font-semibold">{t('bootcamps.detail.submissionFormTitle')}</h4>
                                                     <Button variant="ghost" size="sm" onClick={() => setShowSubmissionForm(false)}>
                                                         <X size={16} />
                                                     </Button>
@@ -844,7 +847,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                     <Button
                                                         onClick={handleSubmitSubmission}
                                                         disabled={!submissionUrl.trim() || submittingSubmission}
-                                                        className="flex-1 bg-blue-600 hover:bg-blue-700"
+                                                        className="flex-1"
                                                     >
                                                         {submittingSubmission ? t('bootcamps.detail.btnSubmitting') : t('bootcamps.detail.btnSendSubmission')}
                                                     </Button>
@@ -856,17 +859,21 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                             </div>
                         )}
 
-                        {/* Schedule, Benefits, Curriculum sections - no changes */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+                        {/* Schedule Section */}
+                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                             <div className="mb-4 flex items-center gap-3">
-                                <Calendar className="text-blue-600" size={20} />
-                                <h3 className="text-lg font-semibold">{isCompleted ? t('bootcamps.detail.periodCompleted') : t('bootcamps.detail.periodUpcoming')}</h3>
+                                <div className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-lg">
+                                    <Calendar size={18} />
+                                </div>
+                                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                                    {isCompleted ? t('bootcamps.detail.periodCompleted') : t('bootcamps.detail.periodUpcoming')}
+                                </h3>
                             </div>
                             <div className="space-y-3">
-                                <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-800 dark:bg-blue-900/20">
-                                    <Calendar size={16} className="text-blue-600" />
+                                <div className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                    <Calendar size={16} className="text-primary shrink-0" />
                                     <div>
-                                        <p className="font-medium text-blue-900 dark:text-blue-100">
+                                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                             {new Date(bootcampData.start_date).toLocaleDateString(dateLocale, {
                                                 day: 'numeric',
                                                 month: 'long',
@@ -879,16 +886,16 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                 year: 'numeric',
                                             })}
                                         </p>
-                                        <p className="text-sm text-blue-700 dark:text-blue-300">{t('bootcamps.detail.programDuration')}</p>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('bootcamps.detail.programDuration')}</p>
                                     </div>
                                 </div>
 
                                 {bootcampData.schedules && bootcampData.schedules.length > 0 && (
-                                    <div className="space-y-2">
-                                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('bootcamps.detail.sessionSchedule')}</p>
+                                    <div className="space-y-2 pt-1">
+                                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">{t('bootcamps.detail.sessionSchedule')}</p>
                                         {bootcampData.schedules.map((schedule, idx) => (
-                                            <div key={idx} className="flex items-center gap-3 rounded-lg bg-gray-50 p-3 dark:bg-zinc-700">
-                                                <Clock size={16} className="text-green-600" />
+                                            <div key={idx} className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-800/40">
+                                                <Clock size={15} className="text-primary shrink-0" />
                                                 <span className="font-medium text-gray-900 capitalize dark:text-white">{schedule.day},</span>
                                                 <span className="text-gray-600 dark:text-gray-400">
                                                     {new Date(schedule.schedule_date).toLocaleDateString(dateLocale, {
@@ -906,47 +913,52 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                         </div>
 
                         {/* Benefits */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                             <div className="mb-4 flex items-center gap-3">
-                                <BadgeCheck className="text-green-600" size={20} />
-                                <h3 className="text-lg font-semibold">{t('bootcamps.detail.facilities')}</h3>
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                    <BadgeCheck size={18} />
+                                </div>
+                                <h3 className="text-base font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.facilities')}</h3>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2.5">
                                 {benefitList.map((benefit, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-                                        <BadgeCheck size={18} className="mt-1 min-w-6 text-green-600" />
-                                        <p className="text-gray-700 dark:text-gray-300">{benefit}</p>
+                                    <div key={idx} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                        <BadgeCheck size={18} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">{benefit}</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
                         {/* Curriculum */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
+                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                             <div className="mb-4 flex items-center gap-3">
-                                <Users className="text-purple-600" size={20} />
-                                <h3 className="text-lg font-semibold">{t('bootcamps.detail.curriculum')}</h3>
+                                <div className="bg-primary/10 text-primary flex h-9 w-9 items-center justify-center rounded-lg">
+                                    <Users size={18} />
+                                </div>
+                                <h3 className="text-base font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.curriculum')}</h3>
                             </div>
-                            <div className="space-y-3">
+                            <div className="space-y-2.5">
                                 {curriculumList.map((item, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
-                                        <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-purple-100 text-sm font-semibold text-purple-600 dark:bg-purple-800 dark:text-purple-300">
+                                    <div key={idx} className="flex items-start gap-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                        <div className="bg-primary/10 text-primary mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-xs font-semibold">
                                             {idx + 1}
                                         </div>
-                                        <p className="text-gray-700 dark:text-gray-300">{item}</p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">{item}</p>
                                     </div>
                                 ))}
                             </div>
                         </div>
+
                         {/* Next Step Pelatihan Recommendation Card */}
                         {bootcampData.next_step_product && (
-                            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-                                <div className="mb-4 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-zinc-700">
+                            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <div className="mb-4 flex items-center justify-between border-b border-gray-100 pb-3 dark:border-zinc-800">
                                     <div className="flex items-center gap-2">
-                                        <Sparkles className="h-5 w-5 text-amber-500" />
-                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.nextStepTitle')}</h3>
+                                        <Sparkles className="text-primary h-5 w-5" />
+                                        <h3 className="text-base font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.nextStepTitle')}</h3>
                                     </div>
-                                    <span className="rounded-full bg-primary/10 px-3 py-0.5 text-xs font-semibold text-primary">
+                                    <span className="bg-primary/10 text-primary rounded-md px-2.5 py-0.5 text-xs font-semibold">
                                         {bootcampData.next_step_product.type_label}
                                     </span>
                                 </div>
@@ -959,20 +971,20 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                             <img
                                                 src={bootcampData.next_step_product.thumbnail}
                                                 alt={bootcampData.next_step_product.title}
-                                                className="h-20 w-32 shrink-0 rounded-lg object-cover shadow-sm"
+                                                className="h-20 w-32 shrink-0 rounded-lg border border-gray-200 object-cover dark:border-zinc-700"
                                             />
                                         ) : (
-                                            <div className="flex h-20 w-32 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-zinc-700">
-                                                <Sparkles className="h-8 w-8" />
+                                            <div className="flex h-20 w-32 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-zinc-800">
+                                                <Sparkles className="h-6 w-6" />
                                             </div>
                                         )}
                                         <div className="space-y-1">
-                                            <h4 className="line-clamp-2 text-base font-bold text-gray-900 dark:text-white">
+                                            <h4 className="line-clamp-2 text-base font-semibold text-gray-900 dark:text-white">
                                                 {bootcampData.next_step_product.title}
                                             </h4>
                                             <div className="flex items-baseline gap-2">
                                                 {bootcampData.next_step_product.price === 0 ? (
-                                                    <span className="text-base font-bold text-green-600 dark:text-green-400">{t('bootcamps.detail.free')}</span>
+                                                    <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{t('bootcamps.detail.free')}</span>
                                                 ) : (
                                                     <>
                                                         <span className="text-base font-bold text-gray-900 dark:text-white">
@@ -1002,15 +1014,17 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                         )}
                     </div>
 
-                    {/* ✅ Sidebar - Certificate & Review Section */}
+                    {/* Sidebar - Certificate & Review Section */}
                     <div className="col-span-1">
                         <div className="sticky top-6 space-y-4">
                             {/* Certificate Section */}
                             {isCompleted ? (
-                                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-                                    <div className="mb-4 flex items-center gap-2">
-                                        <Award className="text-yellow-500" size={20} />
-                                        <h3 className="font-semibold">{t('bootcamps.detail.gradCertificate')}</h3>
+                                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                    <div className="mb-4 flex items-center gap-2.5">
+                                        <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg">
+                                            <Award size={18} />
+                                        </div>
+                                        <h3 className="font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.gradCertificate')}</h3>
                                     </div>
 
                                     {isLoading && hasCertificate && (
@@ -1029,8 +1043,8 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
 
                                     {!offersCertificate ? (
                                         <div className="space-y-3 py-6 text-center">
-                                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-700">
-                                                <Award className="h-7 w-7 text-gray-400" />
+                                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-zinc-800">
+                                                <Award className="h-6 w-6 text-gray-400" />
                                             </div>
                                             <div>
                                                 <h4 className="font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.noCertificate')}</h4>
@@ -1043,108 +1057,104 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                         <>
                                             <div className="relative">
                                                 {hasCertificate ? (
-                                            <div className={`group ${isLoading ? 'absolute opacity-0' : 'relative opacity-100'}`}>
-                                                <iframe
-                                                    src={`${route('profile.bootcamp.certificate.preview', { bootcamp: bootcampData.slug })}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                                                    className="h-[238px] w-full rounded-lg border shadow-lg dark:border-zinc-700"
-                                                    title={t('bootcamps.detail.previewCert')}
-                                                    onLoad={handleIframeLoad}
-                                                />
-                                                <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                                                    <div className={`${isLoading ? 'absolute opacity-0' : 'relative opacity-100'}`}>
+                                                        <iframe
+                                                            src={`${route('profile.bootcamp.certificate.preview', { bootcamp: bootcampData.slug })}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                                                            className="h-[238px] w-full rounded-lg border border-gray-200 dark:border-zinc-700"
+                                                            title={t('bootcamps.detail.previewCert')}
+                                                            onLoad={handleIframeLoad}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <img
+                                                        src={'/assets/images/placeholder.png'}
+                                                        alt="Sertifikat"
+                                                        className="aspect-video w-full rounded-lg border border-gray-200 object-cover dark:border-zinc-700"
+                                                    />
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="group relative">
-                                                <img
-                                                    src={'/assets/images/placeholder.png'}
-                                                    alt="Sertifikat"
-                                                    className="aspect-video rounded-lg border object-cover shadow-lg transition-transform group-hover:scale-105 dark:border-zinc-700"
-                                                />
-                                                <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                                            </div>
-                                        )}
-                                    </div>
 
-                                    {hasCertificate ? (
-                                        <div className={`${isLoading ? 'opacity-0' : 'opacity-100'}`}>
-                                            <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                                                {t('bootcamps.detail.downloadCertNotice')}
-                                            </p>
-                                            {certificateParticipant && (
-                                                <div className="mt-2 text-center">
-                                                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                                                        {t('bootcamps.detail.certNumber', {
-                                                            number: `${String(certificateParticipant.certificate_number).padStart(4, '0')}/${certificate?.certificate_number}`,
-                                                        })}
+                                            {hasCertificate ? (
+                                                <div className={`${isLoading ? 'opacity-0' : 'opacity-100'}`}>
+                                                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                                                        {t('bootcamps.detail.downloadCertNotice')}
                                                     </p>
-                                                    <Link
-                                                        href={route('certificate.participant.detail', {
-                                                            code: certificateParticipant.certificate_code,
-                                                        })}
-                                                        className="text-xs text-green-600 underline hover:text-green-800"
-                                                    >
-                                                        {t('bootcamps.detail.viewCertDetail')}
-                                                    </Link>
-                                                </div>
-                                            )}
-                                            <div className="mt-3 space-y-2">
-                                                <Button className="w-full" asChild>
-                                                    <a href={route('profile.bootcamp.certificate', { bootcamp: bootcampData.slug })} target="_blank">
-                                                        <Download size={16} className="mr-2" />
-                                                        {t('bootcamps.detail.downloadCert')}
-                                                    </a>
-                                                </Button>
+                                                    {certificateParticipant && (
+                                                        <div className="mt-2 text-center">
+                                                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                                                                {t('bootcamps.detail.certNumber', {
+                                                                    number: `${String(certificateParticipant.certificate_number).padStart(4, '0')}/${certificate?.certificate_number}`,
+                                                                })}
+                                                            </p>
+                                                            <Link
+                                                                href={route('certificate.participant.detail', {
+                                                                    code: certificateParticipant.certificate_code,
+                                                                })}
+                                                                className="text-primary mt-0.5 inline-block text-xs underline hover:opacity-80"
+                                                            >
+                                                                {t('bootcamps.detail.viewCertDetail')}
+                                                            </Link>
+                                                        </div>
+                                                    )}
+                                                    <div className="mt-4 space-y-2">
+                                                        <Button className="w-full" asChild>
+                                                            <a href={route('profile.bootcamp.certificate', { bootcamp: bootcampData.slug })} target="_blank">
+                                                                <Download size={16} className="mr-2" />
+                                                                {t('bootcamps.detail.downloadCert')}
+                                                            </a>
+                                                        </Button>
 
-                                                <Button variant="outline" className="w-full" asChild>
-                                                    <a
-                                                        href={route('profile.bootcamp.certificate.preview', { bootcamp: bootcampData.slug })}
-                                                        target="_blank"
-                                                    >
-                                                        <Eye size={16} className="mr-2" />
-                                                        {t('bootcamps.detail.btnPreviewCert')}
-                                                    </a>
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                                                {!certificate
-                                                    ? t('bootcamps.detail.certNotReady')
-                                                    : !isFullyPaid
-                                                      ? (isInstallment ? t('bootcamps.detail.certPayInstallment') : t('bootcamps.detail.certPayFull'))
-                                                      : requiresReview && !allAttendanceVerified ? t('bootcamps.detail.certCompleteAttendance', { verified: verifiedAttendances, total: totalSchedules })
-                                                        : requiresReview && needsSubmission && !hasSubmission ? t('bootcamps.detail.certUploadSubmission')
-                                                          : requiresReview && !hasReview ? t('bootcamps.detail.certGiveReview')
-                                                            : t('bootcamps.detail.certWaitBootcamp')}
-                                            </p>
-                                            {isInstallment && !isFullyPaid ? (
-                                                <Button
-                                                    className="mt-3 w-full bg-primary hover:bg-primary/90 text-primary-foreground gap-2 font-semibold"
-                                                    onClick={handlePayCertInstallment}
-                                                    disabled={isPayingCert || isSuspended}
-                                                    id="btn-lunasi-sertifikat-bootcamp"
-                                                >
-                                                    <CreditCard size={16} />
-                                                    {isPayingCert ? t('bootcamps.detail.btnRedirecting') : t('bootcamps.detail.btnPayInstallment')}
-                                                </Button>
+                                                        <Button variant="outline" className="w-full" asChild>
+                                                            <a
+                                                                href={route('profile.bootcamp.certificate.preview', { bootcamp: bootcampData.slug })}
+                                                                target="_blank"
+                                                            >
+                                                                <Eye size={16} className="mr-2" />
+                                                                {t('bootcamps.detail.btnPreviewCert')}
+                                                            </a>
+                                                        </Button>
+                                                    </div>
+                                                </div>
                                             ) : (
-                                                <Button className="mt-3 w-full" disabled>
-                                                    <Download size={16} className="mr-2" />
-                                                    {!certificate
-                                                        ? t('bootcamps.detail.btnCertNotAvailable')
-                                                        : !isFullyPaid
-                                                          ? t('bootcamps.detail.btnCompletePayment')
-                                                          : !allAttendanceVerified
-                                                            ? t('bootcamps.detail.btnCompleteAttendance')
-                                                            : needsSubmission && !hasSubmission
-                                                              ? t('bootcamps.detail.btnUploadSubmission')
-                                                              : !hasReview
-                                                                ? t('bootcamps.detail.btnGiveReview')
-                                                                : t('bootcamps.detail.btnWaitBootcamp')}
-                                                </Button>
+                                                <>
+                                                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
+                                                        {!certificate
+                                                            ? t('bootcamps.detail.certNotReady')
+                                                            : !isFullyPaid
+                                                              ? (isInstallment ? t('bootcamps.detail.certPayInstallment') : t('bootcamps.detail.certPayFull'))
+                                                              : requiresReview && !allAttendanceVerified ? t('bootcamps.detail.certCompleteAttendance', { verified: verifiedAttendances, total: totalSchedules })
+                                                                : requiresReview && needsSubmission && !hasSubmission ? t('bootcamps.detail.certUploadSubmission')
+                                                                  : requiresReview && !hasReview ? t('bootcamps.detail.certGiveReview')
+                                                                    : t('bootcamps.detail.certWaitBootcamp')}
+                                                    </p>
+                                                    {isInstallment && !isFullyPaid ? (
+                                                        <Button
+                                                            className="bg-primary hover:bg-primary/90 text-primary-foreground mt-3 w-full gap-2 font-semibold"
+                                                            onClick={handlePayCertInstallment}
+                                                            disabled={isPayingCert || isSuspended}
+                                                            id="btn-lunasi-sertifikat-bootcamp"
+                                                        >
+                                                            <CreditCard size={16} />
+                                                            {isPayingCert ? t('bootcamps.detail.btnRedirecting') : t('bootcamps.detail.btnPayInstallment')}
+                                                        </Button>
+                                                    ) : (
+                                                        <Button variant="outline" className="mt-3 w-full" disabled>
+                                                            <Download size={16} className="mr-2" />
+                                                            {!certificate
+                                                                ? t('bootcamps.detail.btnCertNotAvailable')
+                                                                : !isFullyPaid
+                                                                  ? t('bootcamps.detail.btnCompletePayment')
+                                                                  : !allAttendanceVerified
+                                                                    ? t('bootcamps.detail.btnCompleteAttendance')
+                                                                    : needsSubmission && !hasSubmission
+                                                                      ? t('bootcamps.detail.btnUploadSubmission')
+                                                                      : !hasReview
+                                                                        ? t('bootcamps.detail.btnGiveReview')
+                                                                        : t('bootcamps.detail.btnWaitBootcamp')}
+                                                        </Button>
+                                                    )}
+                                                </>
                                             )}
-                                        </>
-                                    )}
                                         </>
                                     )}
                                 </div>
@@ -1163,70 +1173,67 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                             installmentTerms={terms}
                                         />
                                     )}
-                                    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-                                        <h3 className="mb-4 text-center font-semibold">{bootcampData.title}</h3>
-                                    <div className="group relative">
+                                    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                                         <img
                                             src={bootcampData.thumbnail ? `/storage/${bootcampData.thumbnail}` : '/assets/images/placeholder.png'}
                                             alt={bootcampData.title}
-                                            className="aspect-video rounded-lg object-cover shadow-lg transition-transform group-hover:scale-105"
+                                            className="aspect-video w-full rounded-lg border border-gray-200 object-cover dark:border-zinc-700"
                                         />
-                                        <div className="absolute inset-0 rounded-lg bg-gradient-to-t from-black/20 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                                        <h3 className="mt-4 font-semibold text-gray-900 dark:text-white">{bootcampData.title}</h3>
+                                        {bootcampData.short_description && (
+                                            <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">{bootcampData.short_description}</p>
+                                        )}
+                                        <Button
+                                            className="mt-4 w-full"
+                                            disabled={!hasActiveAccess}
+                                            onClick={() => {
+                                                const url = formatExternalUrl(bootcampData.group_url);
+                                                if (url) window.open(url, '_blank');
+                                            }}
+                                        >
+                                            <Users size={16} className="mr-2" />
+                                            {t('bootcamps.detail.joinWAGroup')}
+                                        </Button>
                                     </div>
-                                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">{bootcampData.short_description}</p>
-                                    <Button
-                                        className="mt-4 w-full"
-                                        disabled={!hasActiveAccess}
-                                        onClick={() => {
-                                            const url = formatExternalUrl(bootcampData.group_url);
-                                            if (url) window.open(url, '_blank');
-                                        }}
-                                    >
-                                        <Users size={16} className="mr-2" />
-                                        {t('bootcamps.detail.joinWAGroup')}
-                                    </Button>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                            {/* ✅ Review Section in Sidebar */}
+                            {/* Review Section in Sidebar */}
                             {hasActiveAccess && allAttendanceVerified && (!needsSubmission || hasSubmission) && isCompleted && offersCertificate && requiresReview && (
-                                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-800">
-                                    <div className="mb-4 flex items-center gap-2">
-                                        <MessageSquare className="text-amber-500" size={20} />
-                                        <h3 className="font-semibold">{t('bootcamps.detail.reviewSectionTitle')}</h3>
+                                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                    <div className="mb-4 flex items-center gap-2.5">
+                                        <div className="bg-primary/10 text-primary flex h-8 w-8 items-center justify-center rounded-lg">
+                                            <MessageSquare size={18} />
+                                        </div>
+                                        <h3 className="font-semibold text-gray-900 dark:text-white">{t('bootcamps.detail.reviewSectionTitle')}</h3>
                                     </div>
 
                                     {hasReview ? (
-                                        <div className="space-y-4">
-                                            <div className="rounded-lg bg-green-50 p-4 dark:bg-green-900/20">
-                                                <div className="mb-2 flex items-center gap-2">
-                                                    <CheckCircle size={16} className="text-green-600" />
-                                                    <span className="text-sm font-medium text-green-800 dark:text-green-200">{t('bootcamps.detail.reviewSubmitted')}</span>
-                                                </div>
-                                                <div className="mb-2">
-                                                    <StarRating rating={bootcampItem.rating || 0} readonly />
-                                                </div>
-                                                <p className="text-sm text-gray-700 dark:text-gray-300">"{bootcampItem.review}"</p>
+                                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/60">
+                                            <div className="mb-2 flex items-center gap-1.5">
+                                                <CheckCircle size={15} className="text-emerald-600 dark:text-emerald-400" />
+                                                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">{t('bootcamps.detail.reviewSubmitted')}</span>
                                             </div>
+                                            <div className="mb-2">
+                                                <StarRating rating={bootcampItem.rating || 0} readonly />
+                                            </div>
+                                            <p className="text-sm text-gray-700 dark:text-gray-300">"{bootcampItem.review}"</p>
                                         </div>
                                     ) : (
                                         <div className="space-y-4">
-                                            <div className="rounded-lg bg-amber-50 p-4 dark:bg-amber-900/20">
-                                                <p className="text-center text-sm text-amber-800 dark:text-amber-200">
-                                                    {t('bootcamps.detail.reviewPrompt')}
-                                                </p>
+                                            <div className="rounded-lg border border-gray-100 bg-gray-50 p-3.5 text-sm text-gray-700 dark:border-zinc-800 dark:bg-zinc-800/50 dark:text-gray-300">
+                                                {t('bootcamps.detail.reviewPrompt')}
                                             </div>
 
                                             {!showReviewForm ? (
-                                                <Button onClick={() => setShowReviewForm(true)} className="w-full bg-amber-600 hover:bg-amber-700">
+                                                <Button onClick={() => setShowReviewForm(true)} className="w-full">
                                                     <MessageSquare size={16} className="mr-2" />
                                                     {t('bootcamps.detail.btnGiveRatingReview')}
                                                 </Button>
                                             ) : (
                                                 <div className="space-y-4">
                                                     <div className="flex items-center justify-between">
-                                                        <h4 className="text-sm font-medium">{t('bootcamps.detail.reviewFormTitle')}</h4>
+                                                        <h4 className="text-sm font-semibold">{t('bootcamps.detail.reviewFormTitle')}</h4>
                                                         <Button variant="ghost" size="sm" onClick={() => setShowReviewForm(false)}>
                                                             <X size={16} />
                                                         </Button>
@@ -1249,7 +1256,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                             value={reviewText}
                                                             onChange={(e) => setReviewText(e.target.value)}
                                                             placeholder={t('bootcamps.detail.reviewPlaceholder')}
-                                                            className="w-full rounded-lg border border-gray-300 p-2 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                                                            className="focus:border-primary focus:ring-primary w-full rounded-lg border border-gray-300 bg-white p-2 text-sm focus:ring-1 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
                                                             rows={3}
                                                             maxLength={500}
                                                         />
@@ -1269,7 +1276,7 @@ export default function DetailMyBootcamp({ bootcamp, certificate, certificatePar
                                                             onClick={handleSubmitReview}
                                                             disabled={!reviewText.trim() || rating === 0 || submittingReview}
                                                             size="sm"
-                                                            className="flex-1 bg-amber-600 hover:bg-amber-700"
+                                                            className="flex-1"
                                                         >
                                                             {submittingReview ? t('bootcamps.detail.btnSubmitting') : t('bootcamps.detail.btnSend')}
                                                         </Button>
