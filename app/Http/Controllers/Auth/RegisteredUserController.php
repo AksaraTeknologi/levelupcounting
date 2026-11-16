@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Auth\Events\Registered;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,7 +39,7 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $request->validate([
             'name' => 'required|string|max:255',
@@ -93,6 +94,10 @@ class RegisteredUserController extends Controller
         Auth::login($user);
 
         // session()->forget('referral_code');
+
+        if ($request->wantsJson() || $request->expectsJson()) {
+            return response()->json(['user' => $user], 200);
+        }
 
         return to_route('home');
         // return to_route('verification.notice')->with('status', 'Pendaftaran berhasil! Silakan periksa email Anda untuk tautan verifikasi.');

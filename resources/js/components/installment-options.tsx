@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { rupiahFormatter } from '@/lib/utils';
+import { SharedData } from '@/types';
+import { usePage } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import { enUS, id } from 'date-fns/locale';
 import { AlertCircle, CheckCircle2, Clock, CreditCard, Sparkles } from 'lucide-react';
@@ -14,7 +16,8 @@ import { toast } from 'sonner';
 export interface InstallmentTermOption {
     term_number: number;
     amount: number;
-    due_date: string;
+    due_date?: string | null;
+    due_days?: number | null;
 }
 
 export interface ActiveInstallmentTerm {
@@ -65,6 +68,10 @@ export default function InstallmentOptions({
     onBeforePay,
 }: InstallmentOptionsProps) {
     const { t, i18n } = useTranslation('common');
+    const { auth } = usePage<SharedData>().props;
+    const isLoggedIn = !!auth?.user;
+    const isGuestBlocked = !isLoggedIn && !onBeforePay;
+    const isCourse = productType === 'course';
     const dateLocale = i18n.language === 'en' ? enUS : id;
     const [isLoading, setIsLoading] = useState(false);
 
@@ -84,7 +91,7 @@ export default function InstallmentOptions({
         }
     };
 
-    const isAnyTermOverdue = !hasActiveInstallment && terms.some((t) => isTermOverdueCheck(t.due_date));
+    const isAnyTermOverdue = !isCourse && !hasActiveInstallment && terms.some((t) => isTermOverdueCheck(t.due_date));
     const isFullyPaid = hasActiveInstallment && activeInstallment.is_fully_paid;
     const nextTerm = hasActiveInstallment ? activeInstallment.next_term : null;
 
@@ -136,6 +143,15 @@ export default function InstallmentOptions({
     }
 
     async function handlePayInstallment() {
+        if (isGuestBlocked) {
+            toast.error(t('installmentOptions.errors.loginOrFillData'));
+            const currentUrl = encodeURIComponent(window.location.href);
+            setTimeout(() => {
+                window.location.href = `/login?redirect=${currentUrl}`;
+            }, 800);
+            return;
+        }
+
         if (termsAccepted !== undefined && !termsAccepted) {
             toast.error(t('installmentOptions.errors.mustAgreeTerms'));
             return;
@@ -347,6 +363,25 @@ export default function InstallmentOptions({
     // TAMPILAN AWAL (BELUM ADA CICILAN - BAYAR DP)
     return (
         <div className="space-y-4">
+            {/* Banner login terlebih dahulu untuk guest apabila checkout mewajibkan login */}
+            {isGuestBlocked && (
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-3.5 text-xs text-blue-900 dark:bg-blue-950/30 dark:border-blue-900 dark:text-blue-200 flex items-start gap-2.5">
+                    <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="space-y-1">
+                        <p className="font-semibold">{t('installmentOptions.loginRequiredTitle', 'Login Diperlukan untuk Cicilan')}</p>
+                        <p className="opacity-90 leading-relaxed">
+                            {t('installmentOptions.errors.loginOrFillData')}{' '}
+                            <a
+                                href={`/login?redirect=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
+                                className="font-semibold underline hover:text-blue-700"
+                            >
+                                {t('installmentOptions.loginNowLink', 'Masuk Sekarang')}
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            )}
+
             {/* Banner Overdue / Cicilan Ditutup */}
             {isAnyTermOverdue && (
                 <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3.5 text-xs text-destructive dark:text-red-400 flex items-start gap-2.5">
@@ -403,7 +438,14 @@ export default function InstallmentOptions({
                                         <p className="font-medium text-foreground">{i === 0 ? t('installmentOptions.termDp') : t('installmentOptions.termN', { term: term.term_number })}</p>
                                         <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                                             <Clock className="h-3 w-3" />
-                                            {format(parseISO(term.due_date), 'dd MMMM yyyy', { locale: dateLocale })}
+                                            {isCourse && term.due_days
+                                                ? t('installmentOptions.dueDaysLabel', {
+                                                      days: term.due_days,
+                                                      defaultValue: `H+${term.due_days} setelah pembelian`,
+                                                  })
+                                                : term.due_date
+                                                  ? format(parseISO(term.due_date), 'dd MMMM yyyy', { locale: dateLocale })
+                                                  : '-'}
                                         </p>
                                     </div>
                                 </div>
@@ -468,15 +510,17 @@ export default function InstallmentOptions({
                 className="w-full gap-2"
                 size="lg"
                 onClick={handlePayInstallment}
-                disabled={isLoading || (termsAccepted !== undefined && !termsAccepted) || isAnyTermOverdue}
+                disabled={isLoading || (termsAccepted !== undefined && !termsAccepted) || isAnyTermOverdue || isGuestBlocked}
                 id="btn-pay-installment"
             >
                 <CreditCard className="h-4 w-4" />
-                {isAnyTermOverdue
-                    ? t('installmentOptions.btnClosed')
-                    : isLoading
-                      ? t('installmentOptions.processing')
-                      : t('installmentOptions.btnPayDp', { amount: rupiahFormatter.format(dpAmount) })}
+                {isGuestBlocked
+                    ? t('installmentOptions.loginRequiredBtn', 'Login untuk Bayar Cicilan')
+                    : isAnyTermOverdue
+                      ? t('installmentOptions.btnClosed')
+                      : isLoading
+                        ? t('installmentOptions.processing')
+                        : t('installmentOptions.btnPayDp', { amount: rupiahFormatter.format(dpAmount) })}
             </Button>
         </div>
     );

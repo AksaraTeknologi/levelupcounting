@@ -116,8 +116,17 @@ class BootcampController extends Controller
 
         $totalRevenue = $isStaff
             ? 0
-            : Invoice::where('status', 'paid')
-                ->whereHas('bootcampItems')
+            : Invoice::whereIn('status', ['paid', 'completed'])
+                ->where(function ($q) {
+                    $q->where(function ($sq) {
+                        $sq->whereNull('parent_invoice_id')
+                            ->where('is_installment', false)
+                            ->whereHas('bootcampItems');
+                    })->orWhere(function ($cq) {
+                        $cq->whereNotNull('parent_invoice_id')
+                            ->whereHas('parentInvoice.bootcampItems');
+                    });
+                })
                 ->sum('nett_amount');
 
         $statistics = [
@@ -338,7 +347,16 @@ class BootcampController extends Controller
                     ]);
             }
         ])
-            ->where('status', 'paid')
+            ->where(function ($q) {
+                $q->whereIn('status', ['paid', 'completed'])
+                    ->orWhere(function ($iq) {
+                        $iq->where('status', 'installment_pending')
+                            ->whereHas('installmentTerms', function ($tq) {
+                                $tq->where('installment_number', 1)->where('status', 'paid');
+                            });
+                    });
+            })
+            ->whereNull('parent_invoice_id')
             ->whereHas('bootcampItems', function ($query) use ($id) {
                 $query->where('bootcamp_id', $id);
             })

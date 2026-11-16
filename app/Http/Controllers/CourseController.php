@@ -94,13 +94,23 @@ class CourseController extends Controller
 
         $totalRevenue = $isStaff
             ? 0
-            : Invoice::where('status', 'paid')
-                ->whereHas('courseItems', function ($q) use ($user) {
-                    if ($user->hasRole('mentor')) {
-                        $q->whereHas('course', function ($cq) use ($user) {
-                            $cq->where('user_id', $user->id);
-                        });
-                    }
+            : Invoice::whereIn('status', ['paid', 'completed'])
+                ->where(function ($q) use ($user) {
+                    $courseFilter = function ($itemQuery) use ($user) {
+                        if ($user->hasRole('mentor')) {
+                            $itemQuery->whereHas('course', function ($cq) use ($user) {
+                                $cq->where('user_id', $user->id);
+                            });
+                        }
+                    };
+                    $q->where(function ($sq) use ($courseFilter) {
+                        $sq->whereNull('parent_invoice_id')
+                            ->where('is_installment', false)
+                            ->whereHas('courseItems', $courseFilter);
+                    })->orWhere(function ($cq) use ($courseFilter) {
+                        $cq->whereNotNull('parent_invoice_id')
+                            ->whereHas('parentInvoice.courseItems', $courseFilter);
+                    });
                 })
                 ->sum('nett_amount');
 

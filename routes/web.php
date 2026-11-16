@@ -168,7 +168,7 @@ Route::get('/certification-programs/{program:slug}/scholarship-success', [UserCe
 
 Route::get('/payment/va-banks', [InvoiceController::class, 'getVaBanks'])->name('payment.va-banks');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth'])->group(function () {
     Route::get('/course/checkout/success', [UserCourseController::class, 'showCheckoutSuccess'])->name('course.checkout.success');
     Route::get('/bootcamp/register/success', [UserBootcampController::class, 'showRegisterSuccess'])->name('bootcamp.register.success');
     Route::get('/webinar/register/success', [UserWebinarController::class, 'showRegisterSuccess'])->name('webinar.register.success');
@@ -191,6 +191,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::redirect('profile', 'profile/dashboard');
     Route::get('/profile/dashboard', [ProfileController::class, 'index'])->name('profile.index');
     Route::get('/profile/my-courses', [ProfileCourseController::class, 'index'])->name('profile.courses');
+    Route::redirect('/profile/course/{course}', '/profile/my-courses/{course}');
     Route::get('/profile/my-courses/{course}', [ProfileCourseController::class, 'detail'])->name('profile.course.detail');
     Route::get('/profile/my-courses/{course}/certificate', [ProfileCourseController::class, 'downloadCertificate'])->name('profile.course.certificate');
     Route::get('/profile/my-courses/{course}/certificate/preview', [ProfileCourseController::class, 'previewCertificate'])->name('profile.course.certificate.preview');

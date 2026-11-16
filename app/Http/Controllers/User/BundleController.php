@@ -260,7 +260,7 @@ class BundleController extends Controller
                 ->where('bundle_id', $bundle->id)
                 ->exists();
 
-            $hasInstallmentAccess = $activeInstallment && ($activeInstallment['paid_terms'] > 0 || $activeInstallment['is_fully_paid']);
+            $hasInstallmentAccess = $activeInstallment && ($activeInstallment['paid_terms'] > 0 || $activeInstallment['is_fully_paid']) && empty($activeInstallment['is_access_suspended']);
             $hasAccess = $hasRegularPaid || $hasInstallmentAccess;
 
             if (!$hasAccess && !$activeInstallment) {

@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 interface Course {
     title: string;
+    slug?: string;
     thumbnail?: string | null;
     strikethrough_price: number;
     price: number;
@@ -37,8 +38,10 @@ export default function RegisterSection({ course }: { course: Course }) {
     let buttonText: string;
     let warningMessage: string | null = null;
 
+    const checkoutHref = course.registration_url || (course.slug ? `/course/${course.slug}/checkout` : '#');
+
     if (!isLoggedIn) {
-        registrationUrl = course.registration_url;
+        registrationUrl = checkoutHref;
         buttonText = t('course.detail.loginToRegister', 'Login untuk Mendaftar');
         warningMessage = t('course.detail.loginFirstWarning', 'Anda harus login terlebih dahulu!');
     } else if (!isProfileComplete) {
@@ -46,7 +49,7 @@ export default function RegisterSection({ course }: { course: Course }) {
         buttonText = t('course.detail.completeProfileToRegister', 'Lengkapi Profil untuk Mendaftar');
         warningMessage = t('course.detail.incompleteProfileWarning', 'Profil Anda belum lengkap!');
     } else {
-        registrationUrl = course.registration_url;
+        registrationUrl = checkoutHref;
         buttonText = t('course.detail.joinNow', 'Gabung Sekarang');
         warningMessage = null;
     }

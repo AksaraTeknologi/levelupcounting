@@ -71,4 +71,14 @@ class Course extends Model
     {
         return $this->morphMany(ProductInstallmentTerm::class, 'termable')->orderBy('term_number');
     }
+
+    public function getRegistrationUrlAttribute(?string $value = null): string
+    {
+        return $value ?: route('course.checkout', $this->slug);
+    }
+
+    public function getCourseUrlAttribute(?string $value = null): string
+    {
+        return $value ?: route('course.detail', $this->slug);
+    }
 }

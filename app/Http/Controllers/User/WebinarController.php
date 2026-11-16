@@ -138,7 +138,7 @@ class WebinarController extends Controller
                 })
                 ->exists();
 
-            $hasInstallmentAccess = $activeInstallment && ($activeInstallment['paid_terms'] > 0 || $activeInstallment['is_fully_paid']);
+            $hasInstallmentAccess = $activeInstallment && ($activeInstallment['paid_terms'] > 0 || $activeInstallment['is_fully_paid']) && empty($activeInstallment['is_access_suspended']);
             $hasAccess = $hasRegularPaid || $hasInstallmentAccess;
 
             if (!$hasAccess && !$activeInstallment) {

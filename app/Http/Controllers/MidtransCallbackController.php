@@ -211,14 +211,11 @@ class MidtransCallbackController extends Controller
             'bundleEnrollments.bundle.bundleItems.bundleable',
         ]);
 
-        $userId = $parentInvoice->user_id;
-
         if ($parentInvoice->courseItems && $parentInvoice->courseItems->count() > 0) {
             foreach ($parentInvoice->courseItems as $item) {
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('course', $item->course_id, $userId);
             }
         }
 
@@ -227,7 +224,6 @@ class MidtransCallbackController extends Controller
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('bootcamp', $item->bootcamp_id, $userId);
             }
         }
 
@@ -236,7 +232,6 @@ class MidtransCallbackController extends Controller
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('webinar', $item->webinar_id, $userId);
             }
         }
 
@@ -256,14 +251,6 @@ class MidtransCallbackController extends Controller
 
                 if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
                     $bundleEnrollment->createIndividualEnrollments();
-                }
-
-                $bundle = $bundleEnrollment->bundle;
-                if ($bundle && $bundle->bundleItems) {
-                    foreach ($bundle->bundleItems as $bundleItem) {
-                        $type = $bundleItem->getTypeSlug();
-                        $this->addToCertificateParticipants($type, $bundleItem->bundleable_id, $userId);
-                    }
                 }
             }
         }
@@ -1061,7 +1048,7 @@ class MidtransCallbackController extends Controller
             }
         } else {
             $defaultAffiliate = User::where('affiliate_code', 'LUC2025')->first()
-                ?? User::role('affiliate')->first();
+                ?? User::whereHas('roles', fn ($q) => $q->where('name', 'affiliate'))->first();
 
             if ($defaultAffiliate && $defaultAffiliate->id !== $invoice->user_id) {
                 $invoice->update(['referred_by_user_id' => $defaultAffiliate->id]);
@@ -1069,13 +1056,17 @@ class MidtransCallbackController extends Controller
                 if ($defaultAffiliate->affiliate_status === 'Active' && (float) $defaultAffiliate->commission > 0) {
                     $commissionAmount = $invoice->nett_amount * ($defaultAffiliate->commission / 100);
 
-                    AffiliateEarning::create([
-                        'affiliate_user_id' => $defaultAffiliate->id,
-                        'invoice_id' => $invoice->id,
-                        'amount' => $commissionAmount,
-                        'rate' => $defaultAffiliate->commission,
-                        'status' => 'approved',
-                    ]);
+                    AffiliateEarning::firstOrCreate(
+                        [
+                            'affiliate_user_id' => $defaultAffiliate->id,
+                            'invoice_id' => $invoice->id,
+                        ],
+                        [
+                            'amount' => $commissionAmount,
+                            'rate' => $defaultAffiliate->commission,
+                            'status' => 'approved',
+                        ]
+                    );
                 }
             }
         }
@@ -1097,15 +1088,19 @@ class MidtransCallbackController extends Controller
             if ($mentor && $mentor->hasRole('mentor') && $mentor->affiliate_status === 'Active' && (float) $mentor->commission > 0) {
                 $commissionAmount = $courseItem->price * ($mentor->commission / 100);
 
-                AffiliateEarning::create([
-                    'affiliate_user_id' => $mentor->id,
-                    'invoice_id' => $invoice->id,
-                    'amount' => $commissionAmount,
-                    'rate' => $mentor->commission,
-                    'status' => 'approved',
-                    'type' => 'mentor_course',
-                    'course_id' => $course->id,
-                ]);
+                AffiliateEarning::firstOrCreate(
+                    [
+                        'affiliate_user_id' => $mentor->id,
+                        'invoice_id' => $invoice->id,
+                        'type' => 'mentor_course',
+                        'course_id' => $course->id,
+                    ],
+                    [
+                        'amount' => $commissionAmount,
+                        'rate' => $mentor->commission,
+                        'status' => 'approved',
+                    ]
+                );
             }
         }
     }

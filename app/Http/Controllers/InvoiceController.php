@@ -1622,6 +1622,7 @@ class InvoiceController extends Controller
                             'status' => 'paid',
                             'paid_at' => Carbon::now('Asia/Jakarta'),
                         ]);
+                        $this->addEnrollmentToCertificateParticipants($parentInvoice);
                         event(new \App\Events\TransactionPaid($parentInvoice));
                     }
                 }
@@ -2060,6 +2061,7 @@ class InvoiceController extends Controller
                 // Cek apakah semua termin lunas
                 if ($parentInvoice->isFullyPaid()) {
                     $parentInvoice->update(['status' => 'paid', 'paid_at' => Carbon::now('Asia/Jakarta')]);
+                    $this->addEnrollmentToCertificateParticipants($parentInvoice);
                     $this->sendWhatsAppInstallmentComplete($parentInvoice, $invoice);
                 } else {
                     $this->sendWhatsAppTermPaid($invoice, $parentInvoice);
@@ -2132,12 +2134,14 @@ class InvoiceController extends Controller
     {
         try {
             // Jika invoice adalah cicilan anak, delegasikan ke handler pesan cicilan termin
-            if ($invoice->isInstallmentChild() && $invoice->parentInvoice) {
-                $parentInvoice = $invoice->parentInvoice;
-                if ($parentInvoice->isFullyPaid()) {
-                    $this->sendWhatsAppInstallmentComplete($parentInvoice, $invoice);
-                } else {
-                    $this->sendWhatsAppTermPaid($invoice, $parentInvoice);
+            if ($invoice->isInstallmentChild()) {
+                $parentInvoice = $invoice->parentInvoice ?? ($invoice->parent_invoice_id ? Invoice::find($invoice->parent_invoice_id) : null);
+                if ($parentInvoice) {
+                    if ($parentInvoice->isFullyPaid()) {
+                        $this->sendWhatsAppInstallmentComplete($parentInvoice, $invoice);
+                    } else {
+                        $this->sendWhatsAppTermPaid($invoice, $parentInvoice);
+                    }
                 }
                 return;
             }
@@ -2256,19 +2260,11 @@ class InvoiceController extends Controller
         }
         $parentInvoice->loadMissing($relations);
 
-        $userId = $parentInvoice->user_id;
-        $certMethod = method_exists($this, 'addToCertificateParticipantsHelper')
-            ? 'addToCertificateParticipantsHelper'
-            : (method_exists($this, 'addToCertificateParticipants') ? 'addToCertificateParticipants' : null);
-
         if ($parentInvoice->courseItems && $parentInvoice->courseItems->count() > 0) {
             foreach ($parentInvoice->courseItems as $item) {
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                if ($certMethod) {
-                    $this->$certMethod('course', $item->course_id, $userId);
-                }
             }
         }
 
@@ -2277,9 +2273,6 @@ class InvoiceController extends Controller
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                if ($certMethod) {
-                    $this->$certMethod('bootcamp', $item->bootcamp_id, $userId);
-                }
             }
         }
 
@@ -2288,9 +2281,6 @@ class InvoiceController extends Controller
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                if ($certMethod) {
-                    $this->$certMethod('webinar', $item->webinar_id, $userId);
-                }
             }
         }
 
@@ -2318,16 +2308,6 @@ class InvoiceController extends Controller
 
                 if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
                     $bundleEnrollment->createIndividualEnrollments();
-                }
-
-                $bundle = $bundleEnrollment->bundle;
-                if ($bundle && $bundle->bundleItems && $certMethod) {
-                    foreach ($bundle->bundleItems as $bundleItem) {
-                        $type = method_exists($bundleItem, 'getTypeSlug') ? $bundleItem->getTypeSlug() : null;
-                        if ($type) {
-                            $this->$certMethod($type, $bundleItem->bundleable_id, $userId);
-                        }
-                    }
                 }
             }
         }
@@ -2626,18 +2606,39 @@ class InvoiceController extends Controller
         return $message;
     }
 
+    private function getPhoneNumberForInvoice(Invoice $invoice): ?string
+    {
+        if ($invoice->user && !empty($invoice->user->phone_number)) {
+            return $invoice->user->phone_number;
+        }
+
+        if ($invoice->certificationProgramItems && $invoice->certificationProgramItems->count() > 0) {
+            $certItem = $invoice->certificationProgramItems->first();
+            $application = CertificationProgramApplication::where('certification_program_id', $certItem->certification_program_id)
+                ->where('user_id', $invoice->user_id)
+                ->latest()
+                ->first();
+            if ($application && !empty($application->phone)) {
+                return $application->phone;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Kirim WhatsApp saat satu termin cicilan berhasil dibayar (belum lunas)
      */
     private function sendWhatsAppTermPaid(Invoice $childInvoice, Invoice $parentInvoice): void
     {
         try {
-            $user = $parentInvoice->user;
-            if (!$user?->phone_number) {
+            $parentInvoice->loadMissing(['user', 'certificationProgramItems']);
+            $rawPhone = $this->getPhoneNumberForInvoice($parentInvoice);
+            if (!$rawPhone) {
                 return;
             }
 
-            $phoneNumber = $this->formatPhoneNumber($user->phone_number);
+            $phoneNumber = $this->formatPhoneNumber($rawPhone);
             $message = $this->createWhatsAppInstallmentMessage($childInvoice, $parentInvoice, false);
 
             self::sendText([['phone' => $phoneNumber, 'message' => $message, 'isGroup' => 'false']]);
@@ -2652,8 +2653,9 @@ class InvoiceController extends Controller
     private function sendWhatsAppInstallmentComplete(Invoice $parentInvoice, ?Invoice $lastChildInvoice = null): void
     {
         try {
-            $user = $parentInvoice->user;
-            if (!$user?->phone_number) {
+            $parentInvoice->loadMissing(['user', 'certificationProgramItems']);
+            $rawPhone = $this->getPhoneNumberForInvoice($parentInvoice);
+            if (!$rawPhone) {
                 return;
             }
 
@@ -2662,7 +2664,7 @@ class InvoiceController extends Controller
                 $childInvoice = $parentInvoice;
             }
 
-            $phoneNumber = $this->formatPhoneNumber($user->phone_number);
+            $phoneNumber = $this->formatPhoneNumber($rawPhone);
             $message = $this->createWhatsAppInstallmentMessage($childInvoice, $parentInvoice, true);
 
             self::sendText([['phone' => $phoneNumber, 'message' => $message, 'isGroup' => 'false']]);
@@ -2966,17 +2968,21 @@ class InvoiceController extends Controller
             if ($affiliate && $affiliate->affiliate_status === 'Active' && $affiliate->commission > 0) {
                 $commissionAmount = $invoice->nett_amount * ($affiliate->commission / 100);
 
-                AffiliateEarning::create([
-                    'affiliate_user_id' => $affiliate->id,
-                    'invoice_id' => $invoice->id,
-                    'amount' => $commissionAmount,
-                    'rate' => $affiliate->commission,
-                    'status' => 'approved',
-                ]);
+                AffiliateEarning::firstOrCreate(
+                    [
+                        'affiliate_user_id' => $affiliate->id,
+                        'invoice_id' => $invoice->id,
+                    ],
+                    [
+                        'amount' => $commissionAmount,
+                        'rate' => $affiliate->commission,
+                        'status' => 'approved',
+                    ]
+                );
             }
         } else {
             $defaultAffiliate = User::where('affiliate_code', 'LUC2025')->first()
-                ?? User::role('affiliate')->first();
+                ?? User::whereHas('roles', fn ($q) => $q->where('name', 'affiliate'))->first();
 
             if ($defaultAffiliate && $defaultAffiliate->id !== $invoice->user_id) {
                 $invoice->update(['referred_by_user_id' => $defaultAffiliate->id]);
@@ -2984,13 +2990,17 @@ class InvoiceController extends Controller
                 if ($defaultAffiliate->affiliate_status === 'Active' && $defaultAffiliate->commission > 0) {
                     $commissionAmount = $invoice->nett_amount * ($defaultAffiliate->commission / 100);
 
-                    AffiliateEarning::create([
-                        'affiliate_user_id' => $defaultAffiliate->id,
-                        'invoice_id' => $invoice->id,
-                        'amount' => $commissionAmount,
-                        'rate' => $defaultAffiliate->commission,
-                        'status' => 'approved',
-                    ]);
+                    AffiliateEarning::firstOrCreate(
+                        [
+                            'affiliate_user_id' => $defaultAffiliate->id,
+                            'invoice_id' => $invoice->id,
+                        ],
+                        [
+                            'amount' => $commissionAmount,
+                            'rate' => $defaultAffiliate->commission,
+                            'status' => 'approved',
+                        ]
+                    );
                 }
             }
         }
@@ -3015,15 +3025,19 @@ class InvoiceController extends Controller
             if ($mentor && $mentor->hasRole('mentor') && $mentor->affiliate_status === 'Active' && $mentor->commission > 0) {
                 $commissionAmount = $courseItem->price * ($mentor->commission / 100);
 
-                AffiliateEarning::create([
-                    'affiliate_user_id' => $mentor->id,
-                    'invoice_id' => $invoice->id,
-                    'amount' => $commissionAmount,
-                    'rate' => $mentor->commission,
-                    'status' => 'approved',
-                    'type' => 'mentor_course',
-                    'course_id' => $course->id,
-                ]);
+                AffiliateEarning::firstOrCreate(
+                    [
+                        'affiliate_user_id' => $mentor->id,
+                        'invoice_id' => $invoice->id,
+                        'type' => 'mentor_course',
+                        'course_id' => $course->id,
+                    ],
+                    [
+                        'amount' => $commissionAmount,
+                        'rate' => $mentor->commission,
+                        'status' => 'approved',
+                    ]
+                );
             }
         }
     }

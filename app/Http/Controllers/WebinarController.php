@@ -102,8 +102,17 @@ class WebinarController extends Controller
 
         $totalRevenue = $isStaff
             ? 0
-            : Invoice::where('status', 'paid')
-                ->whereHas('webinarItems')
+            : Invoice::whereIn('status', ['paid', 'completed'])
+                ->where(function ($q) {
+                    $q->where(function ($sq) {
+                        $sq->whereNull('parent_invoice_id')
+                            ->where('is_installment', false)
+                            ->whereHas('webinarItems');
+                    })->orWhere(function ($cq) {
+                        $cq->whereNotNull('parent_invoice_id')
+                            ->whereHas('parentInvoice.webinarItems');
+                    });
+                })
                 ->sum('nett_amount');
 
         $statistics = [
@@ -274,7 +283,16 @@ class WebinarController extends Controller
                 $query->where('webinar_id', $id);
             }
         ])
-            ->where('status', 'paid')
+            ->where(function ($q) {
+                $q->whereIn('status', ['paid', 'completed'])
+                    ->orWhere(function ($iq) {
+                        $iq->where('status', 'installment_pending')
+                            ->whereHas('installmentTerms', function ($tq) {
+                                $tq->where('installment_number', 1)->where('status', 'paid');
+                            });
+                    });
+            })
+            ->whereNull('parent_invoice_id')
             ->whereHas('webinarItems', function ($query) use ($id) {
                 $query->where('webinar_id', $id);
             })

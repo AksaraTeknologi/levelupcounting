@@ -1329,7 +1329,7 @@ export default function Register({
                     {/* Right Column - Checkout Card */}
                     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="lg:col-span-1">
                         <div className="sticky top-4">
-                            {hasAccess ? (
+                            {hasAccess && (!activeInstallment || activeInstallment.is_fully_paid) ? (
                                 <Card className="overflow-hidden border-2 border-green-500/20">
                                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 dark:from-green-950/20 dark:to-emerald-950/20">
                                         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-green-500 to-emerald-600 shadow-lg">

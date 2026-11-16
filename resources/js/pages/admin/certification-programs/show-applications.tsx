@@ -4,7 +4,7 @@ import { Separator } from '@/components/ui/separator';
 import { router } from '@inertiajs/react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import { BookOpen, Building2, Eye, FileText, GraduationCap, Hash, Mail, Phone, User, X, ZoomIn } from 'lucide-react';
+import { BookOpen, Building2, CreditCard, Eye, FileText, GraduationCap, Hash, Mail, Phone, User, X, ZoomIn } from 'lucide-react';
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useState } from 'react';
@@ -20,6 +20,14 @@ interface RegularApplication {
     document_attachment?: string | null;
     notes?: string | null;
     status: string;
+    has_paid?: boolean;
+    payment_status?: string;
+    is_installment?: boolean;
+    paid_terms?: number;
+    total_terms?: number;
+    installment_status?: string | null;
+    invoice_code?: string;
+    invoice_id?: string;
     created_at: string;
 }
 
@@ -42,6 +50,14 @@ interface ScholarshipApplication {
     whatsapp_share_photo?: string | null;
     instagram_story_photo?: string | null;
     status: string;
+    has_paid?: boolean;
+    payment_status?: string;
+    is_installment?: boolean;
+    paid_terms?: number;
+    total_terms?: number;
+    installment_status?: string | null;
+    invoice_code?: string;
+    invoice_id?: string;
     created_at: string;
 }
 
@@ -58,6 +74,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
     approved: { label: 'Disetujui', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
     rejected: { label: 'Ditolak', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' },
     paid: { label: 'Lunas', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+    installment: { label: 'Cicilan', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' },
 };
 
 // ─── Custom Modal Portal ──────────────────────────────────────────────────────
@@ -285,7 +302,8 @@ function RegularDetailModal({
     const name = app.user?.name ?? app.name ?? '-';
     const email = app.user?.email ?? app.email ?? '-';
     const phone = app.user?.phone_number ?? app.phone ?? '-';
-    const statusInfo = statusMap[app.status] ?? { label: app.status, color: 'bg-gray-200 text-gray-800' };
+    const effectiveStatus = app.has_paid ? (app.payment_status || 'paid') : app.status;
+    const statusInfo = statusMap[effectiveStatus] ?? { label: effectiveStatus, color: 'bg-gray-200 text-gray-800' };
 
     const handleAction = (type: 'approve' | 'reject') => {
         setActionType(type);
@@ -332,7 +350,7 @@ function RegularDetailModal({
                     <div className="flex-1 min-w-0">
                         <h2 className="text-base font-semibold truncate text-gray-900 dark:text-zinc-100">{name}</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <Badge className={`border-0 text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                            <Badge className={`border-0 text-xs ${statusInfo.color}`}>{app.installment_status || statusInfo.label}</Badge>
                             <span className="text-xs text-gray-400">
                                 {format(new Date(app.created_at), 'dd MMM yyyy HH:mm', { locale: id })}
                             </span>
@@ -358,6 +376,13 @@ function RegularDetailModal({
                                 <InfoRow icon={User} label="Nama" value={name} />
                                 <InfoRow icon={Mail} label="Email" value={email} />
                                 <InfoRow icon={Phone} label="No. Telepon" value={phone} />
+                                {app.has_paid && (
+                                    <InfoRow
+                                        icon={CreditCard}
+                                        label="Status Pembayaran"
+                                        value={`${app.installment_status || 'Lunas'}${app.invoice_code ? ` (${app.invoice_code})` : ''}`}
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -396,7 +421,7 @@ function RegularDetailModal({
                     <Button variant="outline" onClick={onClose} className="flex-1">
                         Tutup
                     </Button>
-                    {app.status === 'pending' && (
+                    {app.status === 'pending' && !app.has_paid && !String(app.id).startsWith('inv-') && (
                         <>
                             <Button
                                 variant="destructive"
@@ -448,7 +473,8 @@ function ScholarshipDetailModal({
 
     if (!app) return null;
 
-    const statusInfo = statusMap[app.status] ?? { label: app.status, color: 'bg-gray-200 text-gray-800' };
+    const effectiveStatus = app.has_paid ? (app.payment_status || 'paid') : app.status;
+    const statusInfo = statusMap[effectiveStatus] ?? { label: effectiveStatus, color: 'bg-gray-200 text-gray-800' };
 
     const handleAction = (type: 'approve' | 'reject') => {
         setActionType(type);
@@ -505,7 +531,7 @@ function ScholarshipDetailModal({
                     <div className="flex-1 min-w-0">
                         <h2 className="text-base font-semibold truncate text-gray-900 dark:text-zinc-100">{app.name}</h2>
                         <div className="flex items-center gap-2 mt-0.5">
-                            <Badge className={`border-0 text-xs ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                            <Badge className={`border-0 text-xs ${statusInfo.color}`}>{app.installment_status || statusInfo.label}</Badge>
                             <span className="text-xs text-gray-400">Beasiswa</span>
                             <span className="text-xs text-gray-400">·</span>
                             <span className="text-xs text-gray-400">
@@ -533,6 +559,13 @@ function ScholarshipDetailModal({
                                 <InfoRow icon={User} label="Nama Lengkap" value={app.name} />
                                 <InfoRow icon={Mail} label="Email" value={app.email} />
                                 <InfoRow icon={Phone} label="No. Telepon" value={app.phone} />
+                                {app.has_paid && (
+                                    <InfoRow
+                                        icon={CreditCard}
+                                        label="Status Pembayaran"
+                                        value={`${app.installment_status || 'Lunas'}${app.invoice_code ? ` (${app.invoice_code})` : ''}`}
+                                    />
+                                )}
                             </div>
                         </div>
 
@@ -577,7 +610,7 @@ function ScholarshipDetailModal({
                     <Button variant="outline" onClick={onClose} className="flex-1">
                         Tutup
                     </Button>
-                    {app.status === 'pending' && (
+                    {app.status === 'pending' && !app.has_paid && !String(app.id).startsWith('inv-') && (
                         <>
                             <Button
                                 variant="destructive"
@@ -604,7 +637,7 @@ function ScholarshipDetailModal({
 
 export default function CertificationProgramApplications({ applications, programType, programId }: CertificationProgramApplicationsProps) {
     const label = programType === 'scholarship' ? 'Pendaftar Beasiswa' : 'Pendaftar Program';
-    const approvedCount = applications.filter((a) => a.status === 'approved').length;
+    const approvedCount = applications.filter((a) => a.status === 'approved' || a.has_paid).length;
 
     const [selectedApp, setSelectedApp] = useState<Application | null>(null);
     const [detailOpen, setDetailOpen] = useState(false);
@@ -643,7 +676,8 @@ export default function CertificationProgramApplications({ applications, program
                         const name = isScholarship ? scholarshipApp.name : (regularApp.user?.name ?? regularApp.name ?? '-');
                         const email = isScholarship ? scholarshipApp.email : (regularApp.user?.email ?? regularApp.email ?? '-');
                         const phone = isScholarship ? scholarshipApp.phone : (regularApp.user?.phone_number ?? regularApp.phone ?? '-');
-                        const statusInfo = statusMap[app.status] ?? { label: app.status, color: 'bg-gray-200 text-gray-800' };
+                        const effectiveStatus = app.has_paid ? (app.payment_status || 'paid') : app.status;
+                        const statusInfo = statusMap[effectiveStatus] ?? { label: effectiveStatus, color: 'bg-gray-200 text-gray-800' };
 
                         // Count uploaded docs for scholarship
                         const docCount = isScholarship
@@ -684,7 +718,7 @@ export default function CertificationProgramApplications({ applications, program
                                 </div>
 
                                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                                    <Badge className={`border-0 ${statusInfo.color}`}>{statusInfo.label}</Badge>
+                                    <Badge className={`border-0 ${statusInfo.color}`}>{app.installment_status || statusInfo.label}</Badge>
 
                                     <Button
                                         variant="outline"

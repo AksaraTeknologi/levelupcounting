@@ -7,6 +7,7 @@ use App\Mail\SendEmail;
 use App\Models\AffiliateEarning;
 use App\Models\Certificate;
 use App\Models\CertificateParticipant;
+use App\Models\CertificationProgramApplication;
 use App\Models\Invoice;
 use App\Models\User;
 use App\Traits\WablasTrait;
@@ -201,6 +202,7 @@ class PaymentSettlementService
             // Cek apakah semua termin lunas
             if ($parentInvoice->isFullyPaid()) {
                 $parentInvoice->update(['status' => 'paid', 'paid_at' => Carbon::now('Asia/Jakarta')]);
+                $this->addEnrollmentToCertificateParticipants($parentInvoice);
                 event(new TransactionPaid($parentInvoice));
                 $this->sendWhatsAppInstallmentComplete($parentInvoice, $childInvoice);
             } else {
@@ -300,8 +302,36 @@ class PaymentSettlementService
      */
     public function activateInstallmentEnrollments(Invoice $parentInvoice): void
     {
+        $parentInvoice->loadMissing([
+            'courseItems',
+            'bootcampItems',
+            'webinarItems',
+            'certificationProgramItems',
+            'bundleEnrollments.bundle.bundleItems.bundleable',
+        ]);
+
+        $userId = $parentInvoice->user_id;
+
+        foreach ($parentInvoice->courseItems as $item) {
+            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
+        }
+
+        foreach ($parentInvoice->bootcampItems as $item) {
+            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
+        }
+
+        foreach ($parentInvoice->webinarItems as $item) {
+            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
+        }
+
+        foreach ($parentInvoice->certificationProgramItems as $item) {
+            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
+        }
+
         if ($parentInvoice->bundleEnrollments && $parentInvoice->bundleEnrollments->count() > 0) {
             foreach ($parentInvoice->bundleEnrollments as $bundleEnrollment) {
+                $bundleEnrollment->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
+
                 if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
                     $bundleEnrollment->createIndividualEnrollments();
                 }
@@ -312,6 +342,47 @@ class PaymentSettlementService
             'parent_invoice_code' => $parentInvoice->invoice_code,
             'user_id' => $parentInvoice->user_id,
         ]);
+    }
+
+    /**
+     * Menambahkan seluruh peserta program & bundle ke certificate participants
+     */
+    public function addEnrollmentToCertificateParticipants(Invoice $invoice): void
+    {
+        $invoice->loadMissing([
+            'courseItems',
+            'bootcampItems',
+            'webinarItems',
+            'bundleEnrollments.bundle.bundleItems.bundleable',
+        ]);
+
+        $userId = $invoice->user_id;
+
+        foreach ($invoice->courseItems as $item) {
+            $this->addToCertificateParticipants('course', $item->course_id, $userId);
+        }
+
+        foreach ($invoice->bootcampItems as $item) {
+            $this->addToCertificateParticipants('bootcamp', $item->bootcamp_id, $userId);
+        }
+
+        foreach ($invoice->webinarItems as $item) {
+            $this->addToCertificateParticipants('webinar', $item->webinar_id, $userId);
+        }
+
+        if ($invoice->bundleEnrollments && $invoice->bundleEnrollments->count() > 0) {
+            foreach ($invoice->bundleEnrollments as $bundleEnrollment) {
+                $bundle = $bundleEnrollment->bundle;
+                if ($bundle && $bundle->bundleItems) {
+                    foreach ($bundle->bundleItems as $bundleItem) {
+                        $type = method_exists($bundleItem, 'getTypeSlug') ? $bundleItem->getTypeSlug() : null;
+                        if ($type) {
+                            $this->addToCertificateParticipants($type, $bundleItem->bundleable_id, $userId);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -370,7 +441,7 @@ class PaymentSettlementService
             }
         } else {
             $defaultAffiliate = User::where('affiliate_code', 'LUC2025')->first()
-                ?? User::role('affiliate')->first();
+                ?? User::whereHas('roles', fn ($q) => $q->where('name', 'affiliate'))->first();
 
             if ($defaultAffiliate && $defaultAffiliate->id !== $invoice->user_id) {
                 $invoice->update(['referred_by_user_id' => $defaultAffiliate->id]);
@@ -494,12 +565,14 @@ class PaymentSettlementService
     public function sendWhatsAppNotification(Invoice $invoice): void
     {
         try {
-            if ($invoice->isInstallmentChild() && $invoice->parentInvoice) {
-                $parentInvoice = $invoice->parentInvoice;
-                if ($parentInvoice->isFullyPaid()) {
-                    $this->sendWhatsAppInstallmentComplete($parentInvoice, $invoice);
-                } else {
-                    $this->sendWhatsAppTermPaid($invoice, $parentInvoice);
+            if ($invoice->isInstallmentChild()) {
+                $parentInvoice = $invoice->parentInvoice ?? ($invoice->parent_invoice_id ? Invoice::find($invoice->parent_invoice_id) : null);
+                if ($parentInvoice) {
+                    if ($parentInvoice->isFullyPaid()) {
+                        $this->sendWhatsAppInstallmentComplete($parentInvoice, $invoice);
+                    } else {
+                        $this->sendWhatsAppTermPaid($invoice, $parentInvoice);
+                    }
                 }
                 return;
             }
@@ -546,18 +619,39 @@ class PaymentSettlementService
         }
     }
 
+    private function getPhoneNumberForInvoice(Invoice $invoice): ?string
+    {
+        if ($invoice->user && !empty($invoice->user->phone_number)) {
+            return $invoice->user->phone_number;
+        }
+
+        if ($invoice->certificationProgramItems && $invoice->certificationProgramItems->count() > 0) {
+            $certItem = $invoice->certificationProgramItems->first();
+            $application = CertificationProgramApplication::where('certification_program_id', $certItem->certification_program_id)
+                ->where('user_id', $invoice->user_id)
+                ->latest()
+                ->first();
+            if ($application && !empty($application->phone)) {
+                return $application->phone;
+            }
+        }
+
+        return null;
+    }
+
     /**
      * Kirim WhatsApp saat satu termin cicilan berhasil dibayar
      */
     public function sendWhatsAppTermPaid(Invoice $childInvoice, Invoice $parentInvoice): void
     {
         try {
-            $user = $parentInvoice->user;
-            if (!$user?->phone_number) {
+            $parentInvoice->loadMissing(['user', 'certificationProgramItems']);
+            $rawPhone = $this->getPhoneNumberForInvoice($parentInvoice);
+            if (!$rawPhone) {
                 return;
             }
 
-            $phoneNumber = $this->formatPhoneNumber($user->phone_number);
+            $phoneNumber = $this->formatPhoneNumber($rawPhone);
             $message = $this->createWhatsAppInstallmentMessage($childInvoice, $parentInvoice, false);
 
             self::sendText([['phone' => $phoneNumber, 'message' => $message, 'isGroup' => 'false']]);
@@ -572,8 +666,9 @@ class PaymentSettlementService
     public function sendWhatsAppInstallmentComplete(Invoice $parentInvoice, ?Invoice $lastChildInvoice = null): void
     {
         try {
-            $user = $parentInvoice->user;
-            if (!$user?->phone_number) {
+            $parentInvoice->loadMissing(['user', 'certificationProgramItems']);
+            $rawPhone = $this->getPhoneNumberForInvoice($parentInvoice);
+            if (!$rawPhone) {
                 return;
             }
 
@@ -582,7 +677,7 @@ class PaymentSettlementService
                 $childInvoice = $parentInvoice;
             }
 
-            $phoneNumber = $this->formatPhoneNumber($user->phone_number);
+            $phoneNumber = $this->formatPhoneNumber($rawPhone);
             $message = $this->createWhatsAppInstallmentMessage($childInvoice, $parentInvoice, true);
 
             self::sendText([['phone' => $phoneNumber, 'message' => $message, 'isGroup' => 'false']]);

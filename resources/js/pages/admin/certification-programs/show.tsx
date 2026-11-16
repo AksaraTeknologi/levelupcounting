@@ -72,6 +72,9 @@ interface Application {
     email?: string;
     phone?: string;
     status: string;
+    has_paid?: boolean;
+    payment_status?: string;
+    installment_status?: string | null;
     created_at: string;
 }
 
@@ -114,8 +117,8 @@ export default function ShowCertificationProgram({ program, applications, transa
     const typeLabel = program.type === 'scholarship' ? 'Beasiswa' : 'Reguler';
     const typeColor = program.type === 'scholarship' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800';
 
-    const paidTransactionsCount = transactions.filter((t) => t.status === 'paid').length;
-    const approvedApplications = applications.filter((a) => a.status === 'approved');
+    const paidTransactionsCount = transactions.filter((t) => t.status === 'paid' || t.status === 'installment_pending').length;
+    const approvedApplications = applications.filter((a) => a.status === 'approved' || a.has_paid || a.payment_status === 'paid' || a.payment_status === 'completed' || a.payment_status === 'installment_pending');
     const totalSchedules = (program.schedules?.length ?? 0) + (program.socializationSchedules?.length ?? 0);
     const uploadedRecordings = (program.schedules?.filter((s) => s.recording_url)?.length ?? 0) + (program.socializationSchedules?.filter((s) => s.recording_url)?.length ?? 0);
 

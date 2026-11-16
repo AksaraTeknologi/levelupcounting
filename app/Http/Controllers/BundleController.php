@@ -43,8 +43,17 @@ class BundleController extends Controller
 
         $totalRevenue = $isStaff
             ? 0
-            : Invoice::where('status', 'paid')
-                ->whereHas('bundleEnrollments')
+            : Invoice::whereIn('status', ['paid', 'completed'])
+                ->where(function ($q) {
+                    $q->where(function ($sq) {
+                        $sq->whereNull('parent_invoice_id')
+                            ->where('is_installment', false)
+                            ->whereHas('bundleEnrollments');
+                    })->orWhere(function ($cq) {
+                        $cq->whereNotNull('parent_invoice_id')
+                            ->whereHas('parentInvoice.bundleEnrollments');
+                    });
+                })
                 ->sum('nett_amount');
 
         $statistics = [
