@@ -1730,7 +1730,7 @@ class InvoiceController extends Controller
             }
         }
 
-        if ($invoice->status === 'paid') {
+        if ($invoice->status === 'paid' || ($invoice->isInstallmentParent() && $invoice->paidTermsCount() > 0)) {
             $invoice->loadMissing([
                 'courseItems.course',
                 'bootcampItems.bootcamp',
@@ -1744,8 +1744,8 @@ class InvoiceController extends Controller
             ]);
         }
 
-        if ($isTripay) {
-            // For Tripay, never render user/checkout/pending. Redirect back to product registration/checkout URL.
+        if ($isTripay || ($invoice->isInstallmentParent() && $invoice->paidTermsCount() === 0)) {
+            // For Tripay or unpaid installment parent, never render user/checkout/pending. Redirect back to product registration/checkout URL.
             return redirect($this->getInvoiceProductUrl($invoice));
         }
 
@@ -2072,7 +2072,7 @@ class InvoiceController extends Controller
 
         if (!$referredByUserId) {
             $defaultAffiliate = User::where('affiliate_code', 'LUC2025')->first()
-                ?? User::role('affiliate')->first();
+                ?? User::whereHas('roles', fn ($q) => $q->where('name', 'affiliate'))->first();
             if ($defaultAffiliate && $defaultAffiliate->id !== $invoice->user_id) {
                 $referredByUserId = $defaultAffiliate->id;
                 $invoice->update(['referred_by_user_id' => $referredByUserId]);
@@ -2082,21 +2082,18 @@ class InvoiceController extends Controller
         if ($referredByUserId) {
             $affiliate = User::find($referredByUserId);
             if ($affiliate && $affiliate->affiliate_status === 'Active' && $affiliate->commission > 0) {
-                // Avoid duplicate affiliate earning for this invoice
-                $alreadyExists = AffiliateEarning::where('invoice_id', $invoice->id)
-                    ->where('affiliate_user_id', $affiliate->id)
-                    ->exists();
-
-                if (!$alreadyExists) {
-                    $commissionAmount = $invoice->nett_amount * ($affiliate->commission / 100);
-                    AffiliateEarning::create([
+                $commissionAmount = $invoice->nett_amount * ($affiliate->commission / 100);
+                AffiliateEarning::firstOrCreate(
+                    [
                         'affiliate_user_id' => $affiliate->id,
                         'invoice_id'        => $invoice->id,
-                        'amount'            => $commissionAmount,
-                        'rate'              => $affiliate->commission,
-                        'status'            => 'approved',
-                    ]);
-                }
+                    ],
+                    [
+                        'amount' => $commissionAmount,
+                        'rate'   => $affiliate->commission,
+                        'status' => 'approved',
+                    ]
+                );
             }
         }
     }
@@ -2640,13 +2637,7 @@ class InvoiceController extends Controller
 
         $targetInvoice = $parentInvoice ?? $invoice;
 
-        if ($targetInvoice->status === 'pending' && in_array($incomingStatus, ['PAID', 'SETTLEMENT'], true)) {
-            $fulfillmentService = app(InvoiceFulfillmentService::class);
-            $fulfillmentService->fulfill($targetInvoice, 'PAID', 'TRIPAY', 'TRIPAY', $refToCheck);
-            $targetInvoice->refresh();
-        }
-
-        if ($targetInvoice->status === 'pending') {
+        if ($invoice->status === 'pending') {
             return redirect($this->getInvoiceProductUrl($targetInvoice));
         }
 

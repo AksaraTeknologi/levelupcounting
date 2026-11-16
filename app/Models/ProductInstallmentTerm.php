@@ -63,9 +63,12 @@ class ProductInstallmentTerm extends Model
         $newDueDate = $this->due_date ? \Carbon\Carbon::parse($this->due_date) : null;
 
         foreach ($childInvoices as $child) {
+            $existingFee = ($child->transaction_fee !== null && (int) $child->transaction_fee > 0)
+                ? (int) $child->transaction_fee
+                : max(0, (int) $child->amount - (int) $child->nett_amount);
             $child->update([
                 'installment_term_id' => $this->id,
-                'amount' => $this->amount + $adminFeePerTerm,
+                'amount' => $this->amount + $existingFee,
                 'nett_amount' => $this->amount,
                 'installment_due_date' => $newDueDate,
             ]);

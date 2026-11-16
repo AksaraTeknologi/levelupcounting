@@ -17,7 +17,7 @@ use App\Models\PrivateClassSchedule;
 use App\Models\ProductInstallmentTerm;
 use App\Models\User;
 use App\Models\Webinar;
-use App\Services\MidtransService;
+use App\Services\TripayService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -75,6 +75,64 @@ class InstallmentFlowTest extends TestCase
             'category_id' => $category->id,
             'installment_enabled' => true,
         ]);
+
+        config([
+            'payment.default' => 'tripay',
+            'tripay.active_gateway' => 'tripay',
+            'tripay.api_key' => 'DEV-TEST-API-KEY',
+            'tripay.private_key' => 'TEST_TRIPAY_PRIVATE_KEY',
+            'tripay.merchant_code' => 'T12345',
+            'tripay.sandbox' => true,
+        ]);
+    }
+
+    protected function mockTripayCheckout(string $checkoutUrl, int $feeCustomer = 5000): void
+    {
+        $mockTripay = Mockery::mock(TripayService::class);
+        $mockTripay->shouldReceive('findChannel')
+            ->andReturn((object) [
+                'code' => 'BRIVA',
+                'name' => 'BRI Virtual Account',
+                'fee_customer' => (object) ['flat' => $feeCustomer, 'percent' => 0],
+                'minimum_fee' => null,
+                'maximum_fee' => null,
+            ]);
+        $mockTripay->shouldReceive('calculateCustomerFee')
+            ->andReturn($feeCustomer);
+        $mockTripay->shouldReceive('calculateFee')
+            ->andReturnUsing(function (int $amount, ?string $channel = null) use ($feeCustomer) {
+                return [
+                    'code' => $channel ?? 'BRIVA',
+                    'base_amount' => $amount,
+                    'fee_customer' => $feeCustomer,
+                    'fee_merchant' => 0,
+                    'total_fee' => $feeCustomer,
+                    'total_amount' => $amount + $feeCustomer,
+                ];
+            });
+        $mockTripay->shouldReceive('requestTransaction')
+            ->once()
+            ->andReturnUsing(function ($merchantRef, $method, $title, $amount) use ($checkoutUrl, $feeCustomer) {
+                return (object) [
+                    'success' => true,
+                    'data' => (object) [
+                        'reference' => 'DEV-' . $merchantRef,
+                        'merchant_ref' => $merchantRef,
+                        'payment_method' => $method ?: 'BRIVA',
+                        'amount' => (int) $amount + $feeCustomer,
+                        'fee_customer' => $feeCustomer,
+                        'fee_merchant' => 0,
+                        'total_fee' => $feeCustomer,
+                        'amount_received' => (int) $amount,
+                        'checkout_url' => $checkoutUrl,
+                        'pay_code' => '77777081234567890',
+                        'qr_url' => null,
+                        'qr_string' => null,
+                        'expired_time' => Carbon::now()->addHours(24)->timestamp,
+                    ],
+                ];
+            });
+        $this->app->instance(TripayService::class, $mockTripay);
     }
 
     /**
@@ -432,15 +490,7 @@ class InstallmentFlowTest extends TestCase
             'due_date' => Carbon::now()->addDays(20),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/12345',
-                'snap_token' => 'mock-snap-12345',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/12345', 5000);
 
         $response = $this->actingAs($this->buyer)
             ->postJson('/invoice/installment', [
@@ -517,15 +567,7 @@ class InstallmentFlowTest extends TestCase
             'installment_due_date' => Carbon::now()->addDays(10),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/term2-67890',
-                'snap_token' => 'mock-snap-67890',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/term2-67890', 5000);
 
         $response = $this->actingAs($this->buyer)
             ->postJson("/installment/{$parent->id}/pay");
@@ -894,6 +936,18 @@ class InstallmentFlowTest extends TestCase
         $this->assertStringContainsString('LUNAS', $messageCompleted);
         $this->assertStringContainsString('Cara Mengakses Materi', $messageCompleted);
         $this->assertStringContainsString('https://chat.whatsapp.com/test-group', $messageCompleted);
+
+        // 3. Also verify PaymentSettlementService (used by TripayCallbackController) generates comprehensive messages
+        $settlementService = app(\App\Services\PaymentSettlementService::class);
+        $svcMsg = $settlementService->createWhatsAppInstallmentMessage($child1, $parent, false);
+        $this->assertStringContainsString('Pembayaran DP Cicilan', $svcMsg);
+        $this->assertStringContainsString('Cara Mengakses Materi', $svcMsg);
+        $this->assertStringContainsString('/profile/installments', $svcMsg);
+        $this->assertStringContainsString('https://chat.whatsapp.com/test-group', $svcMsg);
+
+        $svcMsgCompleted = $settlementService->createWhatsAppInstallmentMessage($child2, $parent, true);
+        $this->assertStringContainsString('LUNAS', $svcMsgCompleted);
+        $this->assertStringContainsString('Cara Mengakses Materi', $svcMsgCompleted);
     }
 
     /**
@@ -923,15 +977,7 @@ class InstallmentFlowTest extends TestCase
             'due_date' => Carbon::now()->addDays(20),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/unverified-123',
-                'snap_token' => 'mock-snap-unverified',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/unverified-123', 5000);
 
         // Harus berhasil 200, tidak dialihkan ke notice verifikasi email (302)
         $response = $this->actingAs($unverifiedBuyer)
@@ -1623,9 +1669,9 @@ class InstallmentFlowTest extends TestCase
     }
 
     /**
-     * Test 21: Doku Webhook Callback - DP payment activates enrollment, lifts access suspension, and records affiliate commission
+     * Test 21: Tripay Webhook Callback - DP payment activates enrollment, lifts access suspension, and records affiliate commission
      */
-    public function test_midtrans_callback_dp_payment_activates_enrollment_and_clears_suspension()
+    public function test_tripay_callback_dp_payment_activates_enrollment_and_clears_suspension()
     {
         $parent = Invoice::create([
             'user_id' => $this->buyer->id,
@@ -1670,26 +1716,14 @@ class InstallmentFlowTest extends TestCase
             'installment_due_date' => Carbon::now()->addDays(20),
         ]);
 
-        $callbackPayload = [
-            'order' => [
-                'invoice_number' => $term1->invoice_code,
-            ],
-            'transaction' => [
-                'status' => 'SUCCESS',
-            ],
-            'payment' => [
-                'payment_method' => 'DOKU',
-                'payment_channel' => 'BCA_VA',
-            ],
-        ];
-
-        $response = $this->postMidtransCallback($term1, 'settlement');
-        $response->assertStatus(200);
+        $response = $this->postTripayCallback($term1, 'PAID', 'BRIVA');
+        $response->assertStatus(200)
+            ->assertJson(['success' => true]);
 
         $term1->refresh();
         $this->assertEquals('paid', $term1->status);
         $this->assertNotNull($term1->paid_at);
-        $this->assertEquals('bank_transfer', $term1->payment_channel);
+        $this->assertEquals('BRIVA', $term1->payment_channel);
 
         $parent->refresh();
         $this->assertEquals('installment_pending', $parent->status);
@@ -1702,9 +1736,9 @@ class InstallmentFlowTest extends TestCase
     }
 
     /**
-     * Test 22: Doku Webhook Callback - Final term payment transitions parent invoice status to paid and fires TransactionPaid event
+     * Test 22: Tripay Webhook Callback - Final term payment transitions parent invoice status to paid and fires TransactionPaid event
      */
-    public function test_midtrans_callback_final_term_marks_parent_paid_and_triggers_event()
+    public function test_tripay_callback_final_term_marks_parent_paid_and_triggers_event()
     {
         Event::fake([TransactionPaid::class]);
 
@@ -1750,20 +1784,7 @@ class InstallmentFlowTest extends TestCase
             'installment_due_date' => Carbon::now()->addDays(5),
         ]);
 
-        $callbackPayload = [
-            'order' => [
-                'invoice_number' => $term2->invoice_code,
-            ],
-            'transaction' => [
-                'status' => 'SUCCESS',
-            ],
-            'payment' => [
-                'payment_method' => 'DOKU',
-                'payment_channel' => 'MANDIRI_VA',
-            ],
-        ];
-
-        $response = $this->postMidtransCallback($term2, 'settlement');
+        $response = $this->postTripayCallback($term2, 'PAID', 'MANDIRIVA');
         $response->assertStatus(200);
 
         $term2->refresh();
@@ -1779,9 +1800,9 @@ class InstallmentFlowTest extends TestCase
     }
 
     /**
-     * Test 23: Doku Webhook Idempotency & Replay Attack - Duplicate callback returns 200 without creating duplicate affiliate earnings
+     * Test 23: Tripay Webhook Idempotency & Replay Attack - Duplicate callback returns 200 without creating duplicate affiliate earnings
      */
-    public function test_midtrans_callback_idempotency_prevents_duplicate_affiliate_earning()
+    public function test_tripay_callback_idempotency_prevents_duplicate_affiliate_earning()
     {
         $parent = Invoice::create([
             'user_id' => $this->buyer->id,
@@ -1823,8 +1844,9 @@ class InstallmentFlowTest extends TestCase
         $this->assertEquals(1, AffiliateEarning::where('invoice_id', $term1->id)->count());
 
         // Replay callback attack / duplicate webhook delivery
-        $response = $this->postMidtransCallback($term1, 'settlement');
-        $response->assertStatus(200);
+        $response = $this->postTripayCallback($term1, 'PAID', 'BRIVA');
+        $response->assertStatus(200)
+            ->assertJson(['success' => true, 'message' => 'Invoice already processed']);
 
         // Assert no duplicate affiliate earning was created
         $this->assertEquals(1, AffiliateEarning::where('invoice_id', $term1->id)->count());
@@ -1971,15 +1993,7 @@ class InstallmentFlowTest extends TestCase
             'installment_due_date' => Carbon::now()->addDays(25),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/term2',
-                'snap_token' => 'mock-snap-term2',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/term2', 5000);
 
         // When requesting payment, the system must strictly choose Term 2 (the next unpaid term)
         $response = $this->actingAs($this->buyer)
@@ -2046,21 +2060,8 @@ class InstallmentFlowTest extends TestCase
 
         $this->assertTrue($parent->isAccessSuspended());
 
-        // When Term 2 is settled (e.g. via payment callback)
-        $callbackPayload = [
-            'order' => [
-                'invoice_number' => $term2->invoice_code,
-            ],
-            'transaction' => [
-                'status' => 'SUCCESS',
-            ],
-            'payment' => [
-                'payment_method' => 'DOKU',
-                'payment_channel' => 'MANUAL_SETTLEMENT',
-            ],
-        ];
-
-        $response = $this->postMidtransCallback($term2, 'settlement');
+        // When Term 2 is settled (e.g. via Tripay payment callback)
+        $response = $this->postTripayCallback($term2, 'PAID', 'BRIVA');
         $response->assertStatus(200);
 
         $parent->refresh();
@@ -2145,15 +2146,7 @@ class InstallmentFlowTest extends TestCase
             'due_date' => Carbon::now()->addDays(20),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/new-program',
-                'snap_token' => 'mock-snap-new-program',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/new-program', 5000);
 
         $response = $this->actingAs($this->buyer)
             ->postJson('/invoice/installment', [
@@ -2172,28 +2165,43 @@ class InstallmentFlowTest extends TestCase
      * Test 29: Private Class Installment - Requires valid schedule and creates proper enrollment
      */
 
-    protected function postMidtransCallback(Invoice $term, string $status = 'settlement')
+    protected function postTripayCallback(Invoice $term, string $status = 'PAID', string $channelCode = 'BRIVA')
     {
-        $serverKey = config('midtrans.server_key') ?: 'SB-Mid-server-TESTKEY123';
-        config(['midtrans.server_key' => $serverKey]);
-        $orderId = $term->invoice_code;
-        $statusCode = '200';
-        $grossAmount = (string) (int) $term->amount;
-        $signatureKey = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $privateKey = config('tripay.private_key') ?: 'TEST_TRIPAY_PRIVATE_KEY';
+        config(['tripay.private_key' => $privateKey]);
 
         $payload = [
-            'order_id' => $orderId,
-            'status_code' => $statusCode,
-            'gross_amount' => $grossAmount,
-            'signature_key' => $signatureKey,
-            'transaction_status' => $status,
-            'payment_type' => 'bank_transfer',
-            'va_numbers' => [
-                ['va_number' => '1234567890', 'bank' => 'bca']
-            ],
+            'reference' => $term->payment_reference ?: ('DEV-' . $term->invoice_code),
+            'merchant_ref' => $term->invoice_code,
+            'payment_method' => $channelCode,
+            'payment_method_code' => $channelCode,
+            'total_amount' => (int) $term->amount,
+            'fee_merchant' => 0,
+            'fee_customer' => (int) ($term->transaction_fee ?? 0),
+            'total_fee' => (int) ($term->transaction_fee ?? 0),
+            'amount_received' => (int) $term->nett_amount,
+            'is_closed_payment' => 1,
+            'status' => strtoupper($status),
+            'paid_at' => Carbon::now()->timestamp,
         ];
 
-        return $this->postJson(route('midtrans.callback'), $payload);
+        $rawJson = json_encode($payload);
+        $signature = hash_hmac('sha256', $rawJson, $privateKey);
+
+        return $this->call(
+            'POST',
+            '/api/callback/tripay',
+            [],
+            [],
+            [],
+            [
+                'HTTP_X_CALLBACK_SIGNATURE' => $signature,
+                'HTTP_X_CALLBACK_EVENT' => 'payment_status',
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_ACCEPT' => 'application/json',
+            ],
+            $rawJson
+        );
     }
     /**
      * Test QA 1: Checkout rejected when registration deadline or term 1 due date is past
@@ -2277,15 +2285,7 @@ class InstallmentFlowTest extends TestCase
             'due_date' => Carbon::now()->addDays(20),
         ]);
 
-        $mockMidtrans = Mockery::mock(MidtransService::class);
-        $mockMidtrans->shouldReceive('createTransaction')
-            ->once()
-            ->andReturn([
-                'success' => true,
-                'redirect_url' => 'https://mock.payment.com/checkout/term-1-deadline',
-                'snap_token' => 'mock-snap-12345',
-            ]);
-        $this->app->instance(MidtransService::class, $mockMidtrans);
+        $this->mockTripayCheckout('https://mock.payment.com/checkout/term-1-deadline', 5000);
 
         $response = $this->actingAs($this->buyer)
             ->postJson('/invoice/installment', [

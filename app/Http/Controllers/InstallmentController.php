@@ -733,16 +733,16 @@ class InstallmentController extends Controller
         $returnUrl = route('tripay.return', ['invoice_id' => $childInvoice->id]);
 
         $tripayResponse = $this->tripayService->requestTransaction(
-            $childInvoice,
-            $item,
+            $childInvoice->invoice_code,
             $channelCode,
+            $productTitle . ' (Cicilan ke-' . $childInvoice->installment_number . ')',
             $nettAmount,
             $user->name,
             $user->email,
             $user->phone_number ?? '',
+            $orderItems,
             $returnUrl,
-            (int) $expiresAt->timestamp,
-            $orderItems
+            (int) $expiresAt->timestamp
         );
 
         $tripayData = $tripayResponse->data ?? null;

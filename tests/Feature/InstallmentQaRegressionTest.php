@@ -71,24 +71,41 @@ class InstallmentQaRegressionTest extends TestCase
 
     protected function postGatewayTermSettlement(Invoice $term)
     {
-        $serverKey = config('midtrans.server_key') ?: 'SB-Mid-server-TESTKEY123';
-        config(['midtrans.server_key' => $serverKey]);
-        $orderId = $term->invoice_code;
-        $statusCode = '200';
-        $grossAmount = (string) (int) $term->amount;
-        $signatureKey = hash('sha512', $orderId . $statusCode . $grossAmount . $serverKey);
+        $privateKey = config('tripay.private_key') ?: 'TEST_TRIPAY_PRIVATE_KEY';
+        config(['tripay.private_key' => $privateKey]);
 
-        return $this->postJson(route('midtrans.callback'), [
-            'order_id' => $orderId,
-            'status_code' => $statusCode,
-            'gross_amount' => $grossAmount,
-            'signature_key' => $signatureKey,
-            'transaction_status' => 'settlement',
-            'payment_type' => 'bank_transfer',
-            'va_numbers' => [
-                ['va_number' => '1234567890', 'bank' => 'bca'],
+        $payload = [
+            'reference' => $term->payment_reference ?: ('DEV-' . $term->invoice_code),
+            'merchant_ref' => $term->invoice_code,
+            'payment_method' => 'BRI Virtual Account',
+            'payment_method_code' => 'BRIVA',
+            'total_amount' => (int) $term->amount,
+            'fee_merchant' => 0,
+            'fee_customer' => (int) ($term->transaction_fee ?? 0),
+            'total_fee' => (int) ($term->transaction_fee ?? 0),
+            'amount_received' => (int) $term->nett_amount,
+            'is_closed_payment' => 1,
+            'status' => 'PAID',
+            'paid_at' => Carbon::now()->timestamp,
+        ];
+
+        $rawJson = json_encode($payload);
+        $signature = hash_hmac('sha256', $rawJson, $privateKey);
+
+        return $this->call(
+            'POST',
+            '/api/callback/tripay',
+            [],
+            [],
+            [],
+            [
+                'HTTP_X_CALLBACK_SIGNATURE' => $signature,
+                'HTTP_X_CALLBACK_EVENT' => 'payment_status',
+                'CONTENT_TYPE' => 'application/json',
+                'HTTP_ACCEPT' => 'application/json',
             ],
-        ]);
+            $rawJson
+        );
     }
 
     public function test_course_checkout_allows_unverified_user_and_register_supports_json()

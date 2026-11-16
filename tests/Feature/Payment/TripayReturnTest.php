@@ -204,4 +204,89 @@ class TripayReturnTest extends TestCase
             ->where('invoice.status', 'paid')
         );
     }
+
+    public function test_tripay_return_for_installment_dp_redirects_properly_and_renders_success_when_paid(): void
+    {
+        $parent = Invoice::create([
+            'user_id' => $this->user->id,
+            'invoice_code' => 'LUC-2600010',
+            'amount' => 205000,
+            'nett_amount' => 200000,
+            'status' => 'installment_pending',
+            'is_installment' => true,
+            'payment_method' => 'tripay',
+            'payment_channel' => 'BRIVA',
+        ]);
+
+        EnrollmentCourse::create([
+            'course_id' => $this->course->id,
+            'invoice_id' => $parent->id,
+            'price' => 200000,
+            'progress' => 0,
+        ]);
+
+        $term1 = Invoice::create([
+            'user_id' => $this->user->id,
+            'parent_invoice_id' => $parent->id,
+            'invoice_code' => 'LUC-2600010-T1',
+            'amount' => 105000,
+            'nett_amount' => 100000,
+            'status' => 'pending',
+            'is_installment' => false,
+            'installment_number' => 1,
+            'payment_method' => 'tripay',
+            'payment_channel' => 'BRIVA',
+            'payment_reference' => 'DEV-TINST01',
+            'expires_at' => Carbon::now()->addDay(),
+        ]);
+
+        Invoice::create([
+            'user_id' => $this->user->id,
+            'parent_invoice_id' => $parent->id,
+            'invoice_code' => 'LUC-2600010-T2',
+            'amount' => 100000,
+            'nett_amount' => 100000,
+            'status' => 'pending',
+            'is_installment' => false,
+            'installment_number' => 2,
+            'expires_at' => Carbon::now()->addDays(30),
+        ]);
+
+        // 1. If DP is still UNPAID on Tripay, tripayReturn redirects back to course checkout
+        Http::fake([
+            'https://tripay.co.id/api-sandbox/transaction/detail*' => Http::response([
+                'success' => true,
+                'data' => [
+                    'reference' => 'DEV-TINST01',
+                    'merchant_ref' => 'LUC-2600010-T1',
+                    'payment_method' => 'BRI Virtual Account',
+                    'payment_method_code' => 'BRIVA',
+                    'status' => 'UNPAID',
+                    'total_amount' => 105000,
+                ],
+            ], 200),
+        ]);
+
+        $unpaidReturn = $this->actingAs($this->user)->get('/tripay/return?invoice_id=' . $term1->id);
+        $unpaidReturn->assertRedirect(route('course.checkout', ['course' => $this->course->slug]));
+
+        // Directly visiting invoice.show for unpaid installment parent also redirects to checkout
+        $this->actingAs($this->user)
+            ->get(route('invoice.show', ['id' => $parent->id]))
+            ->assertRedirect(route('course.checkout', ['course' => $this->course->slug]));
+
+        // 2. Once DP is PAID, tripayReturn redirects to parent invoice.show and renders user/checkout/success
+        $term1->update(['status' => 'paid', 'paid_at' => Carbon::now()]);
+
+        $paidReturn = $this->actingAs($this->user)->get('/tripay/return?invoice_id=' . $term1->id);
+        $paidReturn->assertRedirect(route('invoice.show', ['id' => $parent->id]));
+
+        $showResponse = $this->actingAs($this->user)->get(route('invoice.show', ['id' => $parent->id]));
+        $showResponse->assertStatus(200);
+        $showResponse->assertInertia(fn (Assert $page) => $page
+            ->component('user/checkout/success')
+            ->where('invoice.id', $parent->id)
+            ->where('invoice.status', 'installment_pending')
+        );
+    }
 }

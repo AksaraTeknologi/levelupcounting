@@ -337,13 +337,16 @@ class TripayPaymentGatewayTest extends TestCase
             'price'           => 200000,
         ]);
 
+        $capturedPayloads = [];
+
         Http::fake([
             '*/merchant/payment-channel*' => Http::response([
                 'success' => true,
                 'data'    => $this->sampleTripayChannels(),
             ], 200),
-            '*/transaction/create*' => function ($request) {
+            '*/transaction/create*' => function ($request) use (&$capturedPayloads) {
                 $data = $request->data();
+                $capturedPayloads[] = $data;
                 $nettAmount = (int) ($data['amount'] ?? 350000);
                 $feeCustomer = 4250;
                 return Http::response([
@@ -429,6 +432,13 @@ class TripayPaymentGatewayTest extends TestCase
         $this->assertEquals(4250, (int) $dpInvoice->transaction_fee);
         $this->assertEquals(104250, (int) $dpInvoice->amount);
         $this->assertEquals(208500, (int) $parentInvoice->amount);
+
+        $installmentPayload = $capturedPayloads[1] ?? null;
+        $this->assertNotNull($installmentPayload);
+        $this->assertSame($dpInvoice->invoice_code, $installmentPayload['merchant_ref']);
+        $this->assertSame('BRIVA', $installmentPayload['method']);
+        $this->assertEquals(100000, (int) $installmentPayload['amount']);
+        $this->assertEquals(100000, (int) $installmentPayload['order_items'][0]['price']);
     }
 
     /**
