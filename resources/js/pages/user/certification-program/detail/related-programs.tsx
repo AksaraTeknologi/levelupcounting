@@ -25,7 +25,7 @@ export default function RelatedPrograms({
     relatedPrograms: RelatedProgram[];
     approvedScholarshipProgramIds?: string[];
 }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : id;
 
     if (!relatedPrograms || relatedPrograms.length === 0) return null;

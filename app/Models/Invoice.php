@@ -150,15 +150,14 @@ class Invoice extends Model
         $nextUnpaid = $parentInvoice->nextUnpaidTerm();
         $isFullyPaid = $parentInvoice->isFullyPaid() || ($paidTerms === $totalTerms && $totalTerms > 0);
 
-        $parentGrossAmount = ($parentInvoice->amount == $parentInvoice->nett_amount && $totalTerms > 0)
-            ? (float) $parentInvoice->amount + ($totalTerms * 5000)
-            : (float) $parentInvoice->amount;
+        $parentGrossAmount = (float) $parentInvoice->amount;
 
         return [
             'parent_invoice_id' => $parentInvoice->id,
             'invoice_code' => $parentInvoice->invoice_code,
             'status' => $parentInvoice->status,
             'amount' => $parentGrossAmount,
+            'nett_amount' => (float) $parentInvoice->nett_amount,
             'total_terms' => $totalTerms,
             'paid_terms' => $paidTerms,
             'is_fully_paid' => $isFullyPaid,
@@ -166,9 +165,8 @@ class Invoice extends Model
             'next_term' => $nextUnpaid ? [
                 'id' => $nextUnpaid->id,
                 'term_number' => $nextUnpaid->installment_number,
-                'amount' => ($nextUnpaid->status !== 'paid' && $nextUnpaid->amount == $nextUnpaid->nett_amount)
-                    ? (float) $nextUnpaid->amount + 5000
-                    : (float) $nextUnpaid->amount,
+                'amount' => (float) $nextUnpaid->amount,
+                'nett_amount' => (float) $nextUnpaid->nett_amount,
                 'due_date' => $nextUnpaid->installment_due_date ? $nextUnpaid->installment_due_date->format('Y-m-d') : null,
                 'is_overdue' => $nextUnpaid->installment_due_date
                     ? Carbon::now('Asia/Jakarta')->gt(Carbon::parse($nextUnpaid->installment_due_date)->endOfDay())
@@ -178,9 +176,8 @@ class Invoice extends Model
                 return [
                     'id' => $t->id,
                     'term_number' => $t->installment_number,
-                    'amount' => ($t->status !== 'paid' && $t->amount == $t->nett_amount)
-                        ? (float) $t->amount + 5000
-                        : (float) $t->amount,
+                    'amount' => (float) $t->amount,
+                    'nett_amount' => (float) $t->nett_amount,
                     'due_date' => $t->installment_due_date ? $t->installment_due_date->format('Y-m-d') : null,
                     'status' => $t->status,
                     'paid_at' => $t->paid_at ? $t->paid_at->format('Y-m-d H:i') : null,

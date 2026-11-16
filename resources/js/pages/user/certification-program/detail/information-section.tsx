@@ -24,7 +24,7 @@ function parseList(items?: string | null): ListItem[] {
 }
 
 export default function InformationSection({ program }: { program: CertificationProgram }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     if (!program.description && !program.benefits) return null;
 
     const benefitList = parseList(program.benefits);

@@ -20,6 +20,9 @@
     "checkCertificate": "Verify Certificate",
     "checkCertificateDesc": "Verify your certificate easily using your email and WhatsApp number",
     "articles": "Articles",
+    "articlesDesc": "Read the latest articles, tips, and insights on accounting & taxation",
+    "information": "Information",
+    "informationAndTools": "Information & Resources",
     "login": "Sign In",
     "register": "Sign Up",
     "about": "About",
@@ -167,8 +170,60 @@
       "sessionExpired": "Your session has expired. Please reload the page.",
       "errorProcessTerm": "An error occurred while processing installment payment.",
       "mustAgreeTerms": "Please agree to the terms and conditions first.",
+      "acceptTerms": "Please agree to the terms and conditions first.",
+      "selectPaymentMethod": "Please select a payment method first.",
       "failCreateInvoice": "Failed to create installment invoice",
+      "failCreateBill": "Failed to create installment invoice",
       "errorProcessInstallment": "An error occurred while processing installment payment."
+    },
+    "fullyPaid": {
+      "title": "Installment Paid in Full",
+      "desc": "Your installments for this program are paid in full! Access to materials is fully active.",
+      "historyButton": "View Installment History"
+    },
+    "active": {
+      "title": "Active Installment",
+      "invoiceCode": "Invoice:",
+      "termsPaid": "Terms Paid",
+      "nextBill": "Next Bill:",
+      "termNumber": "Term #{{number}}",
+      "nominal": "Amount:",
+      "dueDate": "Due Date:",
+      "overdue": "Overdue",
+      "remainingBill": "Remaining Total Balance:",
+      "overdueAlertTitle": "Installment Past Due Date",
+      "overdueAlertDesc": "The payment deadline has passed. Self-service payment is closed. Please contact admin to settle your installment.",
+      "processing": "Processing...",
+      "payNow": "Pay Term #{{number}}",
+      "contactAdmin": "Contact Admin via WhatsApp",
+      "allHistory": "All History"
+    },
+    "register": {
+      "closedTitle": "Installment Closed",
+      "closedDesc": "The installment payment option for this program has closed because the payment deadline has passed.",
+      "programCicilan": "Installment Program Available",
+      "termsCount": "{{count}}x Installment Terms",
+      "scheduleTitle": "Installment Payment Schedule",
+      "termsLabel": "Terms",
+      "dpLabel": "Term 1 (DP)",
+      "termNumberLabel": "Term #{{number}}",
+      "includingTripayFee": "Includes Transaction Fee",
+      "termsNoteFee": "Transaction fee is adjusted according to the selected Tripay payment method.",
+      "termsNoteActive": "Access to materials/program is immediately active once the DP is paid.",
+      "termsNotePromo": "Promo vouchers and reward points cannot be used on installment payments.",
+      "termsNoteSuspend": "Access will be suspended if an installment exceeds the due date.",
+      "agreeToTerms": "I agree to the",
+      "termsLink": "installment terms and conditions",
+      "processing": "Processing...",
+      "payDpButton": "Pay DP ({{amount}}) & Activate Program"
     }
+  },
+  "paymentChannelSelector": {
+    "title": "Select Payment Method",
+    "autoVerification": "Automatic Verification",
+    "freeOfCharge": "Free of Charge",
+    "calculatingFee": "Calculating fee...",
+    "otherMethods": "Other Methods",
+    "feeUnavailable": "Payment fee could not be retrieved yet. Please try again or select another payment method."
   }
 }

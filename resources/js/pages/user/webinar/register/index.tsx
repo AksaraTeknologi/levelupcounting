@@ -1,6 +1,6 @@
 import { parseISO } from 'date-fns';
 import InstallmentOptions, { ActiveInstallmentData, InstallmentTermOption } from '@/components/installment-options';
-import PaymentMethodSelector from '@/components/payment-method-selector';
+import PaymentChannelSelector, { CalculatedFeeData } from '@/components/payment-channel-selector';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -89,11 +89,14 @@ interface InvoiceData {
     id: string;
     discount_amount: number;
     nett_amount: number;
+    transaction_fee?: number;
     total_amount: number;
     payment_channel?: string;
+    payment_method?: string;
     discount_code_id?: string;
     discount_code_amount?: number;
     referral_code?: string;
+    affiliate_code?: string;
 }
 
 type RegisterForm = {
@@ -140,7 +143,7 @@ export default function RegisterWebinar({
     installmentTerms?: InstallmentTermOption[];
     activeInstallment?: ActiveInstallmentData | null;
 }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const { auth } = usePage<SharedData>().props;
     const isLoggedIn = !!auth.user;
     const isProfileComplete = isLoggedIn && !!auth.user?.phone_number && !!auth.user?.instance && !!auth.user?.city;
@@ -206,8 +209,10 @@ export default function RegisterWebinar({
     const discountAmount = discountData?.discount_amount || 0;
     const finalWebinarPrice = basePrice - discountAmount;
 
-    const [selectedChannel, setSelectedChannel] = useState<string>('qris');
-    const adminFee = isFree ? 0 : 5000;
+    const [selectedChannel, setSelectedChannel] = useState<string>('');
+    const [calculatedFee, setCalculatedFee] = useState<CalculatedFeeData | null>(null);
+    const [feeError, setFeeError] = useState<string | null>(null);
+    const adminFee = isFree || finalWebinarPrice === 0 ? 0 : (calculatedFee ? calculatedFee.fee_customer : 0);
     const totalPrice = isFree ? 0 : finalWebinarPrice + adminFee;
 
     const { data, setData, post, processing, errors, reset } = useForm<Required<RegisterForm>>({
@@ -380,8 +385,10 @@ export default function RegisterWebinar({
             id: webinar.id,
             discount_amount: originalDiscountAmount + promoDiscountAmount,
             nett_amount: webinar.price - promoDiscountAmount,
-            total_amount: webinar.price - promoDiscountAmount + 5000,
+            transaction_fee: adminFee,
+            total_amount: isFree ? 0 : (webinar.price - promoDiscountAmount + adminFee),
             payment_channel: selectedChannel,
+            payment_method: selectedChannel,
         };
 
         if (activeDiscount?.valid && codeType === 'voucher') {
@@ -503,6 +510,11 @@ export default function RegisterWebinar({
         if (activeInstallment && !activeInstallment.is_fully_paid) {
             toast.error(t('webinar.register.errors.activeInstallmentOngoing'));
             setPaymentTab('installment');
+            return;
+        }
+
+        if (!isFree && !selectedChannel) {
+            toast.error(t('webinar.register.errors.selectPaymentChannel', 'Silakan pilih metode/channel pembayaran terlebih dahulu!'));
             return;
         }
 
@@ -1094,9 +1106,17 @@ export default function RegisterWebinar({
 
                                         <div className="space-y-2 pt-2">
                                             {pendingInvoice.invoice_url && formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
-                                                <Button asChild className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold" size="lg">
-                                                    <a href={pendingInvoice.invoice_url}>
+                                                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" size="lg">
+                                                    <a href={pendingInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
                                                         {t('webinar.register.btnContinuePayment')}
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            {formatExpiryTime(pendingInvoice.expires_at).status !== 'expired' && (
+                                                <Button asChild variant="outline" className="w-full border-indigo-400 text-indigo-700 hover:bg-indigo-50 font-semibold" size="lg">
+                                                    <a href="https://tripay.co.id/simulator" target="_blank" rel="noopener noreferrer">
+                                                        Bayar via Simulator Tripay
                                                     </a>
                                                 </Button>
                                             )}
@@ -1299,6 +1319,19 @@ export default function RegisterWebinar({
                                                                 </div>
                                                             </div>
 
+                                                            {/* Payment Method Selector */}
+                                                            <div className="pt-2">
+                                                                <PaymentChannelSelector
+                                                                    selectedChannel={selectedChannel}
+                                                                    onSelectChannel={setSelectedChannel}
+                                                                    amount={finalWebinarPrice}
+                                                                    onFeeCalculated={(feeData, err) => {
+                                                                        setCalculatedFee(feeData);
+                                                                        setFeeError(err);
+                                                                    }}
+                                                                />
+                                                            </div>
+
                                                             {discountData?.valid && (
                                                                 <div className="flex items-center justify-between text-green-600">
                                                                     <span>{t('webinar.register.promoDiscount', { code: discountData.discount_code.code })}</span>
@@ -1308,7 +1341,15 @@ export default function RegisterWebinar({
 
                                                             <div className="flex items-center justify-between text-gray-600">
                                                                 <span>{t('webinar.register.adminFee')}</span>
-                                                                <span>Rp {adminFee.toLocaleString(i18n.language === 'en' ? 'en-US' : 'id-ID')}</span>
+                                                                <span>
+                                                                    {feeError ? (
+                                                                        <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                                    ) : adminFee === 0 ? (
+                                                                        'Bebas Biaya'
+                                                                    ) : (
+                                                                        `Rp ${adminFee.toLocaleString(i18n.language === 'en' ? 'en-US' : 'id-ID')}`
+                                                                    )}
+                                                                </span>
                                                             </div>
 
                                                             <Separator />
@@ -1336,10 +1377,10 @@ export default function RegisterWebinar({
                                                     </div>
 
                                                     <Button
-                                                        className="mt-6 w-full"
+                                                        className="mt-6 w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                         type="submit"
                                                         size="lg"
-                                                        disabled={!termsAccepted || loading}
+                                                        disabled={!termsAccepted || loading || (!isFree && !selectedChannel) || Boolean(feeError)}
                                                     >
                                                         {loading ? t('webinar.register.processing') : t('webinar.register.btnPayNow')}
                                                     </Button>
@@ -1466,9 +1507,14 @@ export default function RegisterWebinar({
 
                                                     {/* Payment Method Selector */}
                                                     <div className="pt-2">
-                                                        <PaymentMethodSelector
+                                                        <PaymentChannelSelector
                                                             selectedChannel={selectedChannel}
-                                                            onChannelChange={setSelectedChannel}
+                                                            onSelectChannel={setSelectedChannel}
+                                                            amount={finalWebinarPrice}
+                                                            onFeeCalculated={(feeData, err) => {
+                                                                setCalculatedFee(feeData);
+                                                                setFeeError(err);
+                                                            }}
                                                         />
                                                     </div>
 
@@ -1481,7 +1527,15 @@ export default function RegisterWebinar({
 
                                                     <div className="flex items-center justify-between text-gray-600">
                                                         <span>{t('webinar.register.adminFee')}</span>
-                                                        <span>Rp {adminFee.toLocaleString(i18n.language === 'en' ? 'en-US' : 'id-ID')}</span>
+                                                        <span>
+                                                            {feeError ? (
+                                                                <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                            ) : adminFee === 0 ? (
+                                                                'Bebas Biaya'
+                                                            ) : (
+                                                                `Rp ${adminFee.toLocaleString(i18n.language === 'en' ? 'en-US' : 'id-ID')}`
+                                                            )}
+                                                        </span>
                                                     </div>
 
                                                     <Separator />
@@ -1513,10 +1567,10 @@ export default function RegisterWebinar({
 
                                         {!isFree && (installmentTerms?.length ?? 0) === 0 && (
                                             <Button
-                                                className="mt-6 w-full"
+                                                className="mt-6 w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                 type="submit"
                                                 size="lg"
-                                                disabled={(isFree ? false : !termsAccepted) || loading}
+                                                disabled={(isFree ? false : (!termsAccepted || !selectedChannel || Boolean(feeError))) || loading}
                                             >
                                                 {loading ? t('webinar.register.processing') : t('webinar.register.btnPayNow')}
                                             </Button>

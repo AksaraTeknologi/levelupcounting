@@ -44,6 +44,7 @@ interface BundleItem {
 interface Invoice {
     id: string;
     invoice_code: string;
+    invoice_url?: string | null;
     amount: number;
     nett_amount: number;
     transaction_fee: number;
@@ -63,11 +64,26 @@ interface Invoice {
     bundle_enrollments?: BundleItem[];
 }
 
-interface PendingProps {
-    invoice: Invoice;
+interface PaymentInstructionGroup {
+    title: string;
+    steps: string[];
 }
 
-export default function CheckoutPending({ invoice }: PendingProps) {
+interface PendingProps {
+    invoice: Invoice;
+    paymentInstructions?: PaymentInstructionGroup[];
+    transactionDetail?: Record<string, any> | null;
+    simulatorUrl?: string;
+    isSandbox?: boolean;
+}
+
+export default function CheckoutPending({
+    invoice,
+    paymentInstructions = [],
+    transactionDetail = null,
+    simulatorUrl = 'https://tripay.co.id/simulator',
+    isSandbox = true,
+}: PendingProps) {
     const [timeLeft, setTimeLeft] = useState<string>('');
     const [isExpired, setIsExpired] = useState<boolean>(false);
     const [copiedVa, setCopiedVa] = useState<boolean>(false);
@@ -104,7 +120,8 @@ export default function CheckoutPending({ invoice }: PendingProps) {
     const isFailed = invoice.status === 'failed';
     const isOverdue = isExpired && invoice.status === 'pending';
 
-    const isQris = (invoice.payment_channel || '').toLowerCase() === 'qris';
+    const channelUpper = (invoice.payment_channel || '').toUpperCase();
+    const isQris = channelUpper === '' || channelUpper.includes('QRIS');
     const isVa = !isQris;
 
     const copyToClipboard = (text: string, type: 'va' | 'amount') => {
@@ -112,7 +129,7 @@ export default function CheckoutPending({ invoice }: PendingProps) {
         if (type === 'va') {
             setCopiedVa(true);
             setTimeout(() => setCopiedVa(false), 2000);
-            toast.success('Nomor Virtual Account berhasil disalin');
+            toast.success('Nomor / Kode Pembayaran berhasil disalin');
         } else {
             setCopiedAmount(true);
             setTimeout(() => setCopiedAmount(false), 2000);
@@ -166,10 +183,17 @@ export default function CheckoutPending({ invoice }: PendingProps) {
 
     const bankNameMap: Record<string, string> = {
         BMRI: 'Bank Mandiri',
+        MANDIRIVA: 'Bank Mandiri',
         BNIA: 'Bank CIMB Niaga',
+        CIMBVA: 'Bank CIMB Niaga',
         BBBA: 'Bank Permata',
+        PERMATAVA: 'Bank Permata',
         BRIN: 'Bank Rakyat Indonesia (BRI)',
+        BRIVA: 'Bank Rakyat Indonesia (BRI)',
         BSYI: 'Bank Syariah Indonesia (BSI)',
+        BSIVA: 'Bank Syariah Indonesia (BSI)',
+        BNIVA: 'Bank BNI',
+        BCAVA: 'Bank BCA',
         MANDIRI: 'Bank Mandiri',
         CIMB: 'Bank CIMB Niaga',
         CIMB_NIAGA: 'Bank CIMB Niaga',
@@ -178,10 +202,31 @@ export default function CheckoutPending({ invoice }: PendingProps) {
         BSI: 'Bank Syariah Indonesia (BSI)',
         BCA: 'Bank BCA',
         BNI: 'Bank BNI',
+        QRIS: 'QRIS',
+        QRISC: 'QRIS',
+        QRIS2: 'QRIS',
     };
 
-    const channelUpper = (invoice.payment_channel || '').toUpperCase();
-    const bankName = bankNameMap[channelUpper] || invoice.payment_channel || 'Virtual Account';
+    const bankName =
+        transactionDetail?.payment_name ||
+        bankNameMap[channelUpper] ||
+        invoice.payment_channel ||
+        'Virtual Account';
+
+    const dynamicInstructions: PaymentInstructionGroup[] =
+        Array.isArray(paymentInstructions) && paymentInstructions.length > 0
+            ? paymentInstructions
+            : Array.isArray(transactionDetail?.instructions)
+              ? transactionDetail.instructions
+              : [];
+
+    const payCodeValue = invoice.va_number || transactionDetail?.pay_code || null;
+    const qrCodeSrc = invoice.qr_code_url || transactionDetail?.qr_url || null;
+
+    const isTripay = (invoice.payment_method || '').toLowerCase() === 'tripay' || Boolean(transactionDetail);
+    const hostedPaymentUrl = invoice.invoice_url || transactionDetail?.checkout_url || null;
+    const paymentReference = invoice.payment_reference || transactionDetail?.reference || null;
+    const tripaySimulatorUrl = simulatorUrl || 'https://tripay.co.id/simulator';
 
     return (
         <div className="relative min-h-screen bg-background">
@@ -230,6 +275,48 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                             No. Invoice: <span className="font-mono font-semibold text-foreground">{invoice.invoice_code}</span>
                         </p>
                     </motion.div>
+
+                    {/* Mode Sandbox & Simulator Banner */}
+                    {!isPaid && !isFailed && !isOverdue && isSandbox && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.98 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="mb-8"
+                        >
+                            <Card className="overflow-hidden border-2 border-indigo-200 bg-gradient-to-r from-indigo-50/90 via-blue-50/80 to-purple-50/90 p-5 shadow-sm dark:border-indigo-900/60 dark:from-indigo-950/40 dark:via-blue-950/30 dark:to-purple-950/40">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-300">
+                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                            Mode Uji Coba Tripay Sandbox
+                                        </div>
+                                        <h4 className="text-base font-bold text-foreground">
+                                            Gunakan Simulator Pembayaran Tripay
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground leading-relaxed max-w-xl">
+                                            Tagihan ini berada dalam environment Sandbox. Anda dapat menyelesaikan simulasi transaksi secara instan tanpa memotong dana nyata melalui portal Simulator Tripay resmi.
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
+                                        {hostedPaymentUrl && (
+                                            <Button asChild size="sm" className="font-semibold gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+                                                <a href={hostedPaymentUrl} target="_blank" rel="noopener noreferrer">
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                    Halaman Pembayaran Tripay
+                                                </a>
+                                            </Button>
+                                        )}
+                                        <Button asChild size="sm" className="font-semibold gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs">
+                                            <a href={tripaySimulatorUrl} target="_blank" rel="noopener noreferrer">
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                Buka Simulator Tripay
+                                            </a>
+                                        </Button>
+                                    </div>
+                                </div>
+                            </Card>
+                        </motion.div>
+                    )}
 
                     <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
                         {/* Main Payment Section */}
@@ -282,10 +369,13 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                                 <Card className="overflow-hidden border border-border/60 bg-card p-6 shadow-md">
                                     <div className="flex items-center justify-between border-b pb-4">
                                         <div className="flex items-center gap-3">
-                                            <BankLogo bankCode="QRIS" size="md" />
+                                            <BankLogo bankCode={invoice.payment_channel || 'QRIS'} size="md" />
                                             <div>
-                                                <h3 className="font-bold text-foreground">QRIS Dynamic (SNAP BI)</h3>
-                                                <p className="text-xs text-muted-foreground">Merchant: Level Up Counting</p>
+                                                <h3 className="font-bold text-foreground">{bankName || 'QRIS'}</h3>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Merchant: Level Up Counting
+                                                    {invoice.payment_reference ? ` • Ref: ${invoice.payment_reference}` : ''}
+                                                </p>
                                             </div>
                                         </div>
                                         {!isFailed && !isOverdue && (
@@ -299,9 +389,9 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                                     {/* QR Image Display */}
                                     <div className="my-6 flex flex-col items-center justify-center">
                                         <div className="relative rounded-2xl border-2 border-border/80 bg-white p-4 shadow-sm">
-                                            {invoice.qr_code_url ? (
+                                            {qrCodeSrc ? (
                                                 <img
-                                                    src={invoice.qr_code_url}
+                                                    src={qrCodeSrc}
                                                     alt="QRIS Code"
                                                     className={`h-64 w-64 object-contain ${
                                                         isOverdue || isFailed ? 'opacity-25 grayscale blur-[2px]' : ''
@@ -338,29 +428,104 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                                         )}
                                     </div>
 
+                                    {/* Action Buttons: Tripay Hosted & Simulator */}
+                                    {!isOverdue && !isFailed && (
+                                        <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto">
+                                            {hostedPaymentUrl && (
+                                                <Button asChild size="lg" className="w-full sm:flex-1 font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                                                    <a href={hostedPaymentUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Buka Halaman Tripay
+                                                    </a>
+                                                </Button>
+                                            )}
+                                            {isSandbox && (
+                                                <Button asChild variant="outline" size="lg" className="w-full sm:flex-1 font-bold gap-2 border-indigo-400 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300">
+                                                    <a href={tripaySimulatorUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Bayar via Simulator
+                                                    </a>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Simulator Guide for QRIS */}
+                                    {!isPaid && !isFailed && !isOverdue && isSandbox && (
+                                        <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-xs space-y-2 text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-200">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold flex items-center gap-1.5">
+                                                    <CheckCircle2 className="h-4 w-4 text-indigo-600" />
+                                                    Langkah Bayar via Simulator Tripay (QRIS):
+                                                </span>
+                                                <a
+                                                    href={tripaySimulatorUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="font-semibold underline text-indigo-700 hover:text-indigo-800 dark:text-indigo-300 flex items-center gap-1"
+                                                >
+                                                    Buka Simulator <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            </div>
+                                            <ol className="list-inside list-decimal space-y-1 text-muted-foreground dark:text-indigo-300/80">
+                                                <li>Klik tombol <strong>Bayar via Simulator</strong> di atas untuk membuka simulator Tripay.</li>
+                                                <li>Pilih tab <strong>QRIS</strong> pada halaman simulator.</li>
+                                                {paymentReference && (
+                                                    <li>
+                                                        Masukkan Kode Referensi Transaksi: <strong className="font-mono text-foreground font-bold">{paymentReference}</strong>
+                                                    </li>
+                                                )}
+                                                <li>Masukkan nominal tepat sebesar: <strong className="font-bold text-foreground">Rp {(invoice.amount || 0).toLocaleString('id-ID')}</strong>.</li>
+                                                <li>Klik tombol <strong>Bayar</strong> pada simulator. Sistem akan mengonfirmasi pembayaran secara otomatis.</li>
+                                                <li>Kembali ke halaman ini dan klik tombol <strong>Cek Status Pembayaran</strong> di sidebar.</li>
+                                            </ol>
+                                        </div>
+                                    )}
+
                                     {/* QRIS Instructions */}
-                                    <div className="rounded-xl bg-muted/40 p-4 text-xs space-y-2 text-muted-foreground">
-                                        <p className="font-semibold text-foreground">Cara Pembayaran QRIS:</p>
-                                        <ol className="list-inside list-decimal space-y-1">
-                                            <li>Buka aplikasi Mobile Banking atau E-Wallet pilihan Anda.</li>
-                                            <li>Pilih menu <strong>Scan QR / Bayar</strong>.</li>
-                                            <li>Arahkan kamera smartphone ke kode QR di atas.</li>
-                                            <li>Pastikan nama merchant adalah <strong>Level Up Counting</strong> dan total nominal sesuai.</li>
-                                            <li>Konfirmasi pembayaran dan masukkan PIN Anda.</li>
-                                        </ol>
+                                    <div className="rounded-xl bg-muted/40 p-4 text-xs space-y-3 text-muted-foreground">
+                                        {dynamicInstructions.length > 0 ? (
+                                            dynamicInstructions.map((group, idx) => (
+                                                <div key={idx} className="space-y-1.5">
+                                                    <p className="font-semibold text-foreground">{group.title}</p>
+                                                    <ol className="list-inside list-decimal space-y-1">
+                                                        {(group.steps || []).map((step, sIdx) => (
+                                                            <li
+                                                                key={sIdx}
+                                                                dangerouslySetInnerHTML={{ __html: step }}
+                                                            />
+                                                        ))}
+                                                    </ol>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <p className="font-semibold text-foreground">Cara Pembayaran QRIS:</p>
+                                                <ol className="list-inside list-decimal space-y-1">
+                                                    <li>Buka aplikasi Mobile Banking atau E-Wallet pilihan Anda.</li>
+                                                    <li>Pilih menu <strong>Scan QR / Bayar</strong>.</li>
+                                                    <li>Arahkan kamera smartphone ke kode QR di atas.</li>
+                                                    <li>Pastikan nama merchant adalah <strong>Level Up Counting</strong> dan total nominal sesuai.</li>
+                                                    <li>Konfirmasi pembayaran dan masukkan PIN Anda.</li>
+                                                </ol>
+                                            </>
+                                        )}
                                     </div>
                                 </Card>
                             )}
 
-                            {/* State: Virtual Account Card */}
+                            {/* State: Virtual Account / Payment Code Card */}
                             {!isPaid && isVa && (
                                 <Card className="overflow-hidden border border-border/60 bg-card p-6 shadow-md">
                                     <div className="flex items-center justify-between border-b pb-4">
                                         <div className="flex items-center gap-3">
-                                            <BankLogo bankCode={invoice.payment_channel || 'BMRI'} size="md" />
+                                            <BankLogo bankCode={invoice.payment_channel || 'MANDIRIVA'} size="md" />
                                             <div>
-                                                <h3 className="font-bold text-foreground">Virtual Account {bankName}</h3>
-                                                <p className="text-xs text-muted-foreground">Transfer Otomatis Terverifikasi</p>
+                                                <h3 className="font-bold text-foreground">{bankName}</h3>
+                                                <p className="text-xs text-muted-foreground">
+                                                    Transfer Otomatis Terverifikasi
+                                                    {invoice.payment_reference ? ` • Ref: ${invoice.payment_reference}` : ''}
+                                                </p>
                                             </div>
                                         </div>
                                         {!isFailed && !isOverdue && (
@@ -371,28 +536,28 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                                         )}
                                     </div>
 
-                                    {/* VA Number Section */}
+                                    {/* VA Number / Pay Code Section */}
                                     <div className={`my-6 rounded-2xl p-6 text-center border ${
                                         isOverdue || isFailed ? 'bg-red-50/50 dark:bg-red-950/20 border-red-200 dark:border-red-900' : 'bg-muted/30'
                                     }`}>
                                         <div className="mb-3 flex justify-center">
-                                            <BankLogo bankCode={invoice.payment_channel || 'BMRI'} size="lg" />
+                                            <BankLogo bankCode={invoice.payment_channel || 'MANDIRIVA'} size="lg" />
                                         </div>
                                         <span className="text-xs uppercase tracking-wider text-muted-foreground">
-                                            Nomor Rekening Virtual Account
+                                            Nomor Virtual Account / Kode Pembayaran
                                         </span>
                                         <div className="mt-2 flex items-center justify-center gap-3">
                                             <span className={`font-mono text-2xl font-black tracking-wider sm:text-3xl ${
                                                 isOverdue || isFailed ? 'text-muted-foreground line-through' : 'text-foreground'
                                             }`}>
-                                                {invoice.va_number || 'Tidak Tersedia'}
+                                                {payCodeValue || 'Tidak Tersedia'}
                                             </span>
-                                            {invoice.va_number && !isOverdue && !isFailed && (
+                                            {payCodeValue && !isOverdue && !isFailed && (
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => copyToClipboard(invoice.va_number!, 'va')}
+                                                    onClick={() => copyToClipboard(payCodeValue, 'va')}
                                                     className="h-9 px-3 gap-1.5"
                                                 >
                                                     {copiedVa ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
@@ -403,21 +568,89 @@ export default function CheckoutPending({ invoice }: PendingProps) {
 
                                         {(isOverdue || isFailed) && (
                                             <p className="mt-2 text-xs font-semibold text-red-600">
-                                                Nomor Virtual Account ini telah tidak aktif karena transaksi kedaluwarsa atau dibatalkan.
+                                                Nomor pembayaran ini telah tidak aktif karena transaksi kedaluwarsa atau dibatalkan.
                                             </p>
                                         )}
                                     </div>
 
-                                    {/* VA Instructions */}
-                                    <div className="rounded-xl bg-muted/40 p-4 text-xs space-y-2 text-muted-foreground">
-                                        <p className="font-semibold text-foreground">Cara Pembayaran Virtual Account {bankName}:</p>
-                                        <ol className="list-inside list-decimal space-y-1">
-                                            <li>Buka aplikasi m-Banking atau kunjungi ATM terdekat.</li>
-                                            <li>Pilih menu <strong>Transfer / Pembayaran &gt; Virtual Account</strong>.</li>
-                                            <li>Masukkan nomor Virtual Account: <strong className="font-mono">{invoice.va_number}</strong>.</li>
-                                            <li>Periksa nama tagihan dan pastikan nominal tepat sebesar <strong>Rp {(invoice.amount || 0).toLocaleString('id-ID')}</strong>.</li>
-                                            <li>Konfirmasi dan selesaikan pembayaran. Transaksi akan terverifikasi secara instan.</li>
-                                        </ol>
+                                    {/* Action Buttons: Tripay Hosted & Simulator */}
+                                    {!isOverdue && !isFailed && (
+                                        <div className="mb-6 flex flex-col sm:flex-row items-center justify-center gap-3 w-full max-w-md mx-auto">
+                                            {hostedPaymentUrl && (
+                                                <Button asChild size="lg" className="w-full sm:flex-1 font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                                                    <a href={hostedPaymentUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Buka Halaman Tripay
+                                                    </a>
+                                                </Button>
+                                            )}
+                                            {isSandbox && (
+                                                <Button asChild variant="outline" size="lg" className="w-full sm:flex-1 font-bold gap-2 border-indigo-400 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300">
+                                                    <a href={tripaySimulatorUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Bayar via Simulator
+                                                    </a>
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Simulator Guide for Virtual Account */}
+                                    {!isPaid && !isFailed && !isOverdue && isSandbox && (
+                                        <div className="mb-6 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 text-xs space-y-2 text-indigo-950 dark:border-indigo-900/40 dark:bg-indigo-950/20 dark:text-indigo-200">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-bold flex items-center gap-1.5">
+                                                    <CheckCircle2 className="h-4 w-4 text-indigo-600" />
+                                                    Langkah Bayar via Simulator Tripay ({bankName}):
+                                                </span>
+                                                <a
+                                                    href={tripaySimulatorUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="font-semibold underline text-indigo-700 hover:text-indigo-800 dark:text-indigo-300 flex items-center gap-1"
+                                                >
+                                                    Buka Simulator <ExternalLink className="h-3 w-3" />
+                                                </a>
+                                            </div>
+                                            <ol className="list-inside list-decimal space-y-1 text-muted-foreground dark:text-indigo-300/80">
+                                                <li>Salin Nomor Virtual Account di atas ({payCodeValue}).</li>
+                                                <li>Klik tombol <strong>Bayar via Simulator</strong> di atas untuk membuka portal simulator Tripay.</li>
+                                                <li>Pilih tab <strong>Virtual Account ({bankName})</strong> pada halaman simulator.</li>
+                                                <li>Tempel nomor Virtual Account dan masukkan nominal: <strong className="font-bold text-foreground">Rp {(invoice.amount || 0).toLocaleString('id-ID')}</strong>.</li>
+                                                <li>Klik tombol <strong>Bayar</strong> pada simulator.</li>
+                                                <li>Kembali ke halaman ini dan klik tombol <strong>Cek Status Pembayaran</strong> di sidebar.</li>
+                                            </ol>
+                                        </div>
+                                    )}
+
+                                    {/* VA / Payment Instructions */}
+                                    <div className="rounded-xl bg-muted/40 p-4 text-xs space-y-3 text-muted-foreground">
+                                        {dynamicInstructions.length > 0 ? (
+                                            dynamicInstructions.map((group, idx) => (
+                                                <div key={idx} className="space-y-1.5">
+                                                    <p className="font-semibold text-foreground">{group.title}</p>
+                                                    <ol className="list-inside list-decimal space-y-1">
+                                                        {(group.steps || []).map((step, sIdx) => (
+                                                            <li
+                                                                key={sIdx}
+                                                                dangerouslySetInnerHTML={{ __html: step }}
+                                                            />
+                                                        ))}
+                                                    </ol>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <>
+                                                <p className="font-semibold text-foreground">Cara Pembayaran {bankName}:</p>
+                                                <ol className="list-inside list-decimal space-y-1">
+                                                    <li>Buka aplikasi m-Banking atau kunjungi ATM terdekat.</li>
+                                                    <li>Pilih menu <strong>Transfer / Pembayaran &gt; Virtual Account</strong>.</li>
+                                                    <li>Masukkan nomor Virtual Account: <strong className="font-mono">{payCodeValue}</strong>.</li>
+                                                    <li>Periksa nama tagihan dan pastikan nominal tepat sebesar <strong>Rp {(invoice.amount || 0).toLocaleString('id-ID')}</strong>.</li>
+                                                    <li>Konfirmasi dan selesaikan pembayaran. Transaksi akan terverifikasi secara instan.</li>
+                                                </ol>
+                                            </>
+                                        )}
                                     </div>
                                 </Card>
                             )}
@@ -483,15 +716,35 @@ export default function CheckoutPending({ invoice }: PendingProps) {
                                             </Link>
                                         </Button>
                                     ) : (
-                                        <Button
-                                            type="button"
-                                            className="w-full font-semibold gap-2 bg-orange-600 hover:bg-orange-700 text-white"
-                                            onClick={handleCheckStatus}
-                                            disabled={isChecking}
-                                        >
-                                            <RefreshCw className={`h-4 w-4 ${isChecking ? 'animate-spin' : ''}`} />
-                                            {isChecking ? 'Memeriksa...' : 'Cek Status Pembayaran'}
-                                        </Button>
+                                        <>
+                                            {hostedPaymentUrl && !isOverdue && !isFailed && (
+                                                <Button asChild size="lg" className="w-full font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+                                                    <a href={hostedPaymentUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Buka Halaman Tripay
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            {!isOverdue && !isFailed && isSandbox && (
+                                                <Button asChild variant="outline" size="lg" className="w-full font-bold gap-2 border-indigo-400 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300">
+                                                    <a href={tripaySimulatorUrl} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="h-4 w-4" />
+                                                        Bayar via Simulator Tripay
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            <Button
+                                                type="button"
+                                                className="w-full font-semibold gap-2 bg-orange-600 hover:bg-orange-700 text-white"
+                                                onClick={handleCheckStatus}
+                                                disabled={isChecking}
+                                            >
+                                                <RefreshCw className={`h-4 w-4 ${isChecking ? 'animate-spin' : ''}`} />
+                                                {isChecking ? 'Memeriksa...' : 'Cek Status Pembayaran'}
+                                            </Button>
+                                        </>
                                     )}
 
                                     {invoice.status === 'pending' && (

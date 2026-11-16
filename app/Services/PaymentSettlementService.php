@@ -10,7 +10,7 @@ use App\Models\CertificateParticipant;
 use App\Models\CertificationProgramApplication;
 use App\Models\Invoice;
 use App\Models\User;
-use App\Traits\WablasTrait;
+use App\Traits\MessaraTrait;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Mail;
 
 class PaymentSettlementService
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     /**
      * Settle an invoice payment atomically and idempotently.
@@ -158,7 +158,10 @@ class PaymentSettlementService
                 $lockedInvoice->discountUsage->delete();
             }
 
-            $lockedInvoice->update(['status' => 'failed']);
+            $lockedInvoice->update([
+                'status' => 'failed',
+                'paid_at' => null,
+            ]);
 
             Log::info('Payment marked as failed', [
                 'invoice_code' => $lockedInvoice->invoice_code,
@@ -171,6 +174,150 @@ class PaymentSettlementService
 
             return true;
         });
+    }
+
+    /**
+     * Handle a refunded transaction safely according to its current status.
+     * - If pending: marks as failed and refunds redeemed points / discount quota.
+     * - If paid: revokes product access, cleans up certificate participants and affiliate/mentor commissions,
+     *   refunds redeemed points / discount quota, and marks the invoice as failed.
+     */
+    public function refund(Invoice $invoice, array $refundData = []): bool
+    {
+        return DB::transaction(function () use ($invoice, $refundData) {
+            /** @var Invoice|null $lockedInvoice */
+            $lockedInvoice = Invoice::with([
+                'courseItems',
+                'bootcampItems',
+                'webinarItems',
+                'certificationProgramItems',
+                'bundleEnrollments.bundle.bundleItems',
+                'discountUsage.discountCode',
+            ])->where('id', $invoice->id)->lockForUpdate()->first();
+
+            if (!$lockedInvoice) {
+                return false;
+            }
+
+            if ($lockedInvoice->status === 'failed') {
+                return true;
+            }
+
+            if ($lockedInvoice->status === 'pending') {
+                return $this->fail($lockedInvoice, 'Payment refunded while pending', 'REFUND');
+            }
+
+            // Jika sebelumnya sudah PAID, cabut hak akses, sertifikat, dan komisi affiliate/mentor
+            $userId = $lockedInvoice->user_id;
+
+            foreach ($lockedInvoice->courseItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('course', $item->course_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->bootcampItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('bootcamp', $item->bootcamp_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->webinarItems as $item) {
+                $item->update(['completed_at' => null]);
+                $this->revokeCertificateParticipantIfNoOtherPaid('webinar', $item->webinar_id, $userId, $lockedInvoice->id);
+            }
+
+            foreach ($lockedInvoice->certificationProgramItems as $item) {
+                $item->update(['completed_at' => null]);
+            }
+
+            foreach ($lockedInvoice->bundleEnrollments as $enrollment) {
+                $enrollment->update(['completed_at' => null]);
+                $bundle = $enrollment->bundle;
+                if ($bundle && $bundle->bundleItems) {
+                    foreach ($bundle->bundleItems as $bundleItem) {
+                        $this->revokeCertificateParticipantIfNoOtherPaid($bundleItem->getTypeSlug(), $bundleItem->bundleable_id, $userId, $lockedInvoice->id);
+                    }
+                }
+            }
+
+            if ($lockedInvoice->isInstallmentChild() && $lockedInvoice->parent_invoice_id) {
+                $parentInvoice = Invoice::find($lockedInvoice->parent_invoice_id);
+                if ($parentInvoice) {
+                    $parentInvoice->update([
+                        'status' => 'installment_pending',
+                        'access_suspended_at' => Carbon::now('Asia/Jakarta'),
+                    ]);
+                }
+            }
+
+            AffiliateEarning::where('invoice_id', $lockedInvoice->id)->delete();
+
+            if ($lockedInvoice->points_redeemed > 0) {
+                try {
+                    app(PointService::class)->refundPoints($lockedInvoice);
+                } catch (\Throwable $e) {
+                    Log::error('Gagal refund poin saat REFUND untuk invoice: ' . $lockedInvoice->invoice_code, ['error' => $e->getMessage()]);
+                }
+            }
+
+            if ($lockedInvoice->discountUsage) {
+                $discountCode = $lockedInvoice->discountUsage->discountCode;
+                if ($discountCode) {
+                    $discountCode->decrement('used_count');
+                }
+                $lockedInvoice->discountUsage->delete();
+            }
+
+            $lockedInvoice->update([
+                'status' => 'failed',
+                'paid_at' => null,
+            ]);
+
+            Log::warning('Payment refund processed and access revoked', [
+                'invoice_code' => $lockedInvoice->invoice_code,
+                'reference' => $refundData['reference'] ?? $lockedInvoice->payment_reference,
+                'note' => $refundData['note'] ?? null,
+            ]);
+
+            return true;
+        });
+    }
+
+    protected function revokeCertificateParticipantIfNoOtherPaid(string $type, $itemId, $userId, string $excludeInvoiceId): void
+    {
+        $certificate = match ($type) {
+            'course' => Certificate::where('course_id', $itemId)->first(),
+            'bootcamp' => Certificate::where('bootcamp_id', $itemId)->first(),
+            'webinar' => Certificate::where('webinar_id', $itemId)->first(),
+            default => null,
+        };
+
+        if (!$certificate) {
+            return;
+        }
+
+        $relation = match ($type) {
+            'course' => ['courseItems', 'course_id'],
+            'bootcamp' => ['bootcampItems', 'bootcamp_id'],
+            'webinar' => ['webinarItems', 'webinar_id'],
+            default => null,
+        };
+
+        if (!$relation) {
+            return;
+        }
+
+        [$relName, $fieldName] = $relation;
+        $hasOtherPaid = Invoice::where('user_id', $userId)
+            ->where('id', '!=', $excludeInvoiceId)
+            ->where('status', 'paid')
+            ->whereHas($relName, fn($q) => $q->where($fieldName, $itemId))
+            ->exists();
+
+        if (!$hasOtherPaid) {
+            CertificateParticipant::where('certificate_id', $certificate->id)
+                ->where('user_id', $userId)
+                ->delete();
+        }
     }
 
     /**
@@ -229,7 +376,7 @@ class PaymentSettlementService
     /**
      * Process enrollments setelah pembayaran sukses
      */
-    public function processInvoiceEnrollments(Invoice $invoice): void
+    public function processInvoiceEnrollments(Invoice $invoice, bool $includeCertificateParticipants = true): void
     {
         $invoice->loadMissing([
             'courseItems',
@@ -246,7 +393,9 @@ class PaymentSettlementService
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('course', $item->course_id, $userId);
+                if ($includeCertificateParticipants) {
+                    $this->addToCertificateParticipants('course', $item->course_id, $userId);
+                }
             }
         }
 
@@ -255,7 +404,9 @@ class PaymentSettlementService
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('bootcamp', $item->bootcamp_id, $userId);
+                if ($includeCertificateParticipants) {
+                    $this->addToCertificateParticipants('bootcamp', $item->bootcamp_id, $userId);
+                }
             }
         }
 
@@ -264,7 +415,9 @@ class PaymentSettlementService
                 $item->update([
                     'completed_at' => Carbon::now('Asia/Jakarta')
                 ]);
-                $this->addToCertificateParticipants('webinar', $item->webinar_id, $userId);
+                if ($includeCertificateParticipants) {
+                    $this->addToCertificateParticipants('webinar', $item->webinar_id, $userId);
+                }
             }
         }
 
@@ -286,11 +439,15 @@ class PaymentSettlementService
                     $enrollment->createIndividualEnrollments();
                 }
 
-                $bundle = $enrollment->bundle;
-                if ($bundle && $bundle->bundleItems) {
-                    foreach ($bundle->bundleItems as $bundleItem) {
-                        $type = $bundleItem->getTypeSlug();
-                        $this->addToCertificateParticipants($type, $bundleItem->bundleable_id, $userId);
+                if ($includeCertificateParticipants) {
+                    $bundle = $enrollment->bundle;
+                    if ($bundle && $bundle->bundleItems) {
+                        foreach ($bundle->bundleItems as $bundleItem) {
+                            $type = method_exists($bundleItem, 'getTypeSlug') ? $bundleItem->getTypeSlug() : null;
+                            if ($type) {
+                                $this->addToCertificateParticipants($type, $bundleItem->bundleable_id, $userId);
+                            }
+                        }
                     }
                 }
             }
@@ -302,41 +459,7 @@ class PaymentSettlementService
      */
     public function activateInstallmentEnrollments(Invoice $parentInvoice): void
     {
-        $parentInvoice->loadMissing([
-            'courseItems',
-            'bootcampItems',
-            'webinarItems',
-            'certificationProgramItems',
-            'bundleEnrollments.bundle.bundleItems.bundleable',
-        ]);
-
-        $userId = $parentInvoice->user_id;
-
-        foreach ($parentInvoice->courseItems as $item) {
-            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
-        }
-
-        foreach ($parentInvoice->bootcampItems as $item) {
-            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
-        }
-
-        foreach ($parentInvoice->webinarItems as $item) {
-            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
-        }
-
-        foreach ($parentInvoice->certificationProgramItems as $item) {
-            $item->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
-        }
-
-        if ($parentInvoice->bundleEnrollments && $parentInvoice->bundleEnrollments->count() > 0) {
-            foreach ($parentInvoice->bundleEnrollments as $bundleEnrollment) {
-                $bundleEnrollment->update(['completed_at' => Carbon::now('Asia/Jakarta')]);
-
-                if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
-                    $bundleEnrollment->createIndividualEnrollments();
-                }
-            }
-        }
+        $this->processInvoiceEnrollments($parentInvoice, false);
 
         Log::info('Installment DP paid - access activated', [
             'parent_invoice_code' => $parentInvoice->invoice_code,
@@ -856,6 +979,9 @@ class PaymentSettlementService
         $message .= "*Detail Pembayaran:*\n";
         $message .= "🧾 No. Invoice: *{$invoice->invoice_code}*\n";
         $message .= "{$typeInfo['icon']} {$typeInfo['name']}: *{$typeInfo['title']}*\n";
+        if (!empty($user->phone_number)) {
+            $message .= "📱 No. WA: *{$user->phone_number}*\n";
+        }
 
         if ($itemType === 'bundle') {
             $bundle = $typeInfo['item'];
@@ -865,6 +991,11 @@ class PaymentSettlementService
             }
         }
 
+        if ($invoice->discountUsage && $invoice->discountUsage->discountCode) {
+            $discountCode = $invoice->discountUsage->discountCode;
+            $message .= "🏷️ Kode Promo: *{$discountCode->code}* (-Rp " . number_format((int) $invoice->discountUsage->discount_amount, 0, ',', '.') . ")\n";
+        }
+
         $message .= "💰 Total Pembayaran: *Rp " . number_format($invoice->amount, 0, ',', '.') . "*\n";
         $paidTime = $invoice->paid_at ? Carbon::parse($invoice->paid_at)->format('d M Y H:i') : Carbon::now('Asia/Jakarta')->format('d M Y H:i');
         $message .= "📅 Waktu Pembayaran: {$paidTime} WIB\n\n";
@@ -872,8 +1003,94 @@ class PaymentSettlementService
         $message .= "*Cara Mengakses Materi:*\n";
         $message .= "1. Login ke akun Anda: {$loginUrl}\n";
         $message .= "2. Kunjungi dashboard: {$profileUrl}\n";
-        $message .= "3. Pilih menu '{$typeInfo['menu']}'\n";
-        $message .= "4. Mulai belajar dan raih sertifikat! 🎓\n\n";
+        if ($itemType === 'bundle') {
+            $message .= "3. Semua program sudah bisa diakses dari menu masing-masing\n";
+            $message .= "4. Mulai belajar dan raih sertifikat untuk setiap program! 🎓\n\n";
+
+            $bundle = $typeInfo['item'];
+            $hasGroupUrl = false;
+            $groupLinks = "";
+
+            if ($bundle && $bundle->bundleItems) {
+                foreach ($bundle->bundleItems as $bItem) {
+                    $program = $bItem->bundleable;
+                    if ($program && !empty($program->group_url)) {
+                        $hasGroupUrl = true;
+                        $groupLinks .= "👥 {$program->title}:\n{$program->group_url}\n\n";
+                    }
+                }
+            }
+
+            if ($hasGroupUrl) {
+                $message .= "*Join Group Pelatihan:*\n";
+                $message .= $groupLinks;
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting dan diskusi\n";
+                $message .= "• Aktif mengikuti seluruh kegiatan program\n\n";
+            }
+        } else {
+            $message .= "3. Pilih menu '{$typeInfo['menu']}'\n";
+            $message .= "4. Mulai belajar dan raih sertifikat! 🎓\n\n";
+        }
+
+        if ($itemType === 'course') {
+            $course = $typeInfo['item'];
+            if ($course && !empty($course->group_url)) {
+                $message .= "*Join Group Kelas:*\n";
+                $message .= "👥 {$course->group_url}\n\n";
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info materi dan diskusi\n\n";
+            }
+        } elseif ($itemType === 'webinar') {
+            $webinar = $typeInfo['item'];
+            if ($webinar && !empty($webinar->start_time)) {
+                $startTime = Carbon::parse($webinar->start_time);
+                $message .= "*Jadwal Webinar:*\n";
+                $message .= "📅 {$startTime->format('d M Y')}\n";
+                $message .= "🕐 {$startTime->format('H:i')} WIB\n\n";
+            }
+
+            if (!empty($webinar?->group_url)) {
+                $message .= "*Join Group Webinar:*\n";
+                $message .= "👥 {$webinar->group_url}\n\n";
+                $message .= "⚠️ *Penting:* \n";
+                $message .= "• Bergabung dengan group untuk update terbaru\n";
+                $message .= "• Jangan lupa attend sesuai jadwal!\n\n";
+            } else {
+                $message .= "⚠️ *Penting:* Jangan lupa bergabung sesuai jadwal!\n\n";
+            }
+        } elseif ($itemType === 'bootcamp') {
+            $bootcamp = $typeInfo['item'];
+            if ($bootcamp && !empty($bootcamp->start_date) && !empty($bootcamp->end_date)) {
+                $startDate = Carbon::parse($bootcamp->start_date);
+                $endDate = Carbon::parse($bootcamp->end_date);
+                $message .= "*Periode Bootcamp:*\n";
+                $message .= "📅 {$startDate->format('d M Y')} - {$endDate->format('d M Y')}\n\n";
+            }
+
+            if (!empty($bootcamp?->group_url)) {
+                $message .= "*Join Group Bootcamp:*\n";
+                $message .= "👥 {$bootcamp->group_url}\n\n";
+                $message .= "⚠️ *Penting:* \n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting dan diskusi\n";
+                $message .= "• Aktif mengikuti seluruh kegiatan bootcamp\n\n";
+            }
+        } elseif ($itemType === 'certification_program') {
+            $program = $typeInfo['item'];
+
+            if (!empty($program?->group_url)) {
+                $message .= "*Join Group Sertifikasi:*\n";
+                $message .= "👥 {$program->group_url}\n\n";
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting\n";
+                $message .= "• Ikuti jadwal program yang tersedia\n\n";
+            }
+
+            if (!empty($program?->socialization_group_url)) {
+                $message .= "*Join Group Sosialisasi:*\n";
+                $message .= "👥 {$program->socialization_group_url}\n\n";
+            }
+        }
 
         $message .= "Jika Anda memiliki pertanyaan, hubungi Admin kami via WhatsApp di *6287775764475*.\n\n";
         $message .= "Selamat belajar! 🚀\n";
@@ -902,42 +1119,64 @@ class PaymentSettlementService
         $profileUrl = route('profile.index');
         $installmentUrl = route('profile.installments');
 
+        $itemType = null;
         $typeInfo = [
             'icon' => '📘',
             'name' => 'Program',
+            'menu' => 'Dashboard',
             'title' => 'Program Level Up Accounting',
+            'item' => null,
         ];
 
         if ($parentInvoice->bundleEnrollments && $parentInvoice->bundleEnrollments->count() > 0) {
+            $itemType = 'bundle';
             $bundle = $parentInvoice->bundleEnrollments->first()?->bundle;
             $typeInfo = [
                 'icon' => '📦',
                 'name' => 'Paket Bundling',
+                'menu' => 'Dashboard',
                 'title' => $bundle?->title ?? '-',
+                'item' => $bundle,
             ];
         } elseif ($parentInvoice->courseItems && $parentInvoice->courseItems->count() > 0) {
+            $itemType = 'course';
+            $course = $parentInvoice->courseItems->first()?->course;
             $typeInfo = [
                 'icon' => '📚',
                 'name' => 'Kelas Online',
-                'title' => $parentInvoice->courseItems->first()?->course?->title ?? '-',
+                'menu' => 'Kelas Saya',
+                'title' => $course?->title ?? '-',
+                'item' => $course,
             ];
         } elseif ($parentInvoice->bootcampItems && $parentInvoice->bootcampItems->count() > 0) {
+            $itemType = 'bootcamp';
+            $bootcamp = $parentInvoice->bootcampItems->first()?->bootcamp;
             $typeInfo = [
                 'icon' => '🎯',
                 'name' => 'Bootcamp',
-                'title' => $parentInvoice->bootcampItems->first()?->bootcamp?->title ?? '-',
+                'menu' => 'Bootcamp Saya',
+                'title' => $bootcamp?->title ?? '-',
+                'item' => $bootcamp,
             ];
         } elseif ($parentInvoice->webinarItems && $parentInvoice->webinarItems->count() > 0) {
+            $itemType = 'webinar';
+            $webinar = $parentInvoice->webinarItems->first()?->webinar;
             $typeInfo = [
                 'icon' => '📺',
                 'name' => 'Webinar',
-                'title' => $parentInvoice->webinarItems->first()?->webinar?->title ?? '-',
+                'menu' => 'Webinar Saya',
+                'title' => $webinar?->title ?? '-',
+                'item' => $webinar,
             ];
         } elseif ($parentInvoice->certificationProgramItems && $parentInvoice->certificationProgramItems->count() > 0) {
+            $itemType = 'certification_program';
+            $program = $parentInvoice->certificationProgramItems->first()?->certificationProgram;
             $typeInfo = [
                 'icon' => '🧾',
                 'name' => 'Sertifikasi Program',
-                'title' => $parentInvoice->certificationProgramItems->first()?->certificationProgram?->title ?? '-',
+                'menu' => 'Sertifikasi Saya',
+                'title' => $program?->title ?? '-',
+                'item' => $program,
             ];
         }
 
@@ -960,6 +1199,15 @@ class PaymentSettlementService
         $message .= "🧾 Invoice Termin: *{$childInvoice->invoice_code}*\n";
         $message .= "📋 No. Tagihan Cicilan: *{$parentInvoice->invoice_code}*\n";
         $message .= "{$typeInfo['icon']} {$typeInfo['name']}: *{$typeInfo['title']}*\n";
+
+        if ($itemType === 'bundle') {
+            $bundle = $typeInfo['item'];
+            if ($bundle) {
+                $count = $bundle->bundle_items_count ?? ($bundle->bundleItems ? $bundle->bundleItems->count() : 0);
+                $message .= "📦 Berisi: *{$count} Program*\n";
+            }
+        }
+
         $message .= "🔢 Status Termin: *Ke-{$termNumber} dari {$totalTerms}*\n";
         $message .= "💰 Nominal Dibayar: *Rp " . number_format($childInvoice->amount, 0, ',', '.') . "*\n";
         $paidTime = $childInvoice->paid_at ? Carbon::parse($childInvoice->paid_at)->format('d M Y H:i') : Carbon::now('Asia/Jakarta')->format('d M Y H:i');
@@ -973,11 +1221,104 @@ class PaymentSettlementService
             $message .= "💰 Nominal: *Rp " . number_format($nextTerm->amount, 0, ',', '.') . "*\n";
             $message .= "📅 Jatuh Tempo: *{$nextDue}*\n";
             $message .= "🔗 Link Pembayaran/Pelunasan: {$installmentUrl}\n\n";
+        } elseif ($isCompleted) {
+            $message .= "*Status Cicilan:*\n";
+            $message .= "🎉 Status: *LUNAS (Semua {$totalTerms} termin selesai)*\n";
+            $message .= "🏆 Sertifikat program dapat diakses melalui profil Anda setelah menyelesaikan pembelajaran.\n\n";
         }
 
         $message .= "*Cara Mengakses Materi:*\n";
         $message .= "1. Login ke akun Anda: {$loginUrl}\n";
-        $message .= "2. Kunjungi dashboard: {$profileUrl}\n\n";
+        $message .= "2. Kunjungi dashboard: {$profileUrl}\n";
+        if ($itemType === 'bundle') {
+            $message .= "3. Semua program sudah bisa diakses dari menu masing-masing\n";
+            $message .= "4. Mulai belajar dan raih sertifikat untuk setiap program! 🎓\n\n";
+
+            $bundle = $typeInfo['item'];
+            $hasGroupUrl = false;
+            $groupLinks = "";
+
+            if ($bundle && $bundle->bundleItems) {
+                foreach ($bundle->bundleItems as $bItem) {
+                    $program = $bItem->bundleable;
+                    if ($program && !empty($program->group_url)) {
+                        $hasGroupUrl = true;
+                        $groupLinks .= "👥 {$program->title}:\n{$program->group_url}\n\n";
+                    }
+                }
+            }
+
+            if ($hasGroupUrl) {
+                $message .= "*Join Group Pelatihan:*\n";
+                $message .= $groupLinks;
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting dan diskusi\n";
+                $message .= "• Aktif mengikuti seluruh kegiatan program\n\n";
+            }
+        } else {
+            $message .= "3. Pilih menu '{$typeInfo['menu']}'\n";
+            $message .= "4. Mulai belajar dan raih sertifikat! 🎓\n\n";
+        }
+
+        if ($itemType === 'course') {
+            $course = $typeInfo['item'];
+            if ($course && !empty($course->group_url)) {
+                $message .= "*Join Group Kelas:*\n";
+                $message .= "👥 {$course->group_url}\n\n";
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info materi dan diskusi\n\n";
+            }
+        } elseif ($itemType === 'webinar') {
+            $webinar = $typeInfo['item'];
+            if ($webinar && !empty($webinar->start_time)) {
+                $startTime = Carbon::parse($webinar->start_time);
+                $message .= "*Jadwal Webinar:*\n";
+                $message .= "📅 {$startTime->format('d M Y')}\n";
+                $message .= "🕐 {$startTime->format('H:i')} WIB\n\n";
+            }
+
+            if (!empty($webinar?->group_url)) {
+                $message .= "*Join Group Webinar:*\n";
+                $message .= "👥 {$webinar->group_url}\n\n";
+                $message .= "⚠️ *Penting:* \n";
+                $message .= "• Bergabung dengan group untuk update terbaru\n";
+                $message .= "• Jangan lupa attend sesuai jadwal!\n\n";
+            } else {
+                $message .= "⚠️ *Penting:* Jangan lupa bergabung sesuai jadwal!\n\n";
+            }
+        } elseif ($itemType === 'bootcamp') {
+            $bootcamp = $typeInfo['item'];
+            if ($bootcamp && !empty($bootcamp->start_date) && !empty($bootcamp->end_date)) {
+                $startDate = Carbon::parse($bootcamp->start_date);
+                $endDate = Carbon::parse($bootcamp->end_date);
+                $message .= "*Periode Bootcamp:*\n";
+                $message .= "📅 {$startDate->format('d M Y')} - {$endDate->format('d M Y')}\n\n";
+            }
+
+            if (!empty($bootcamp?->group_url)) {
+                $message .= "*Join Group Bootcamp:*\n";
+                $message .= "👥 {$bootcamp->group_url}\n\n";
+                $message .= "⚠️ *Penting:* \n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting dan diskusi\n";
+                $message .= "• Aktif mengikuti seluruh kegiatan bootcamp\n\n";
+            }
+        } elseif ($itemType === 'certification_program') {
+            $program = $typeInfo['item'];
+
+            if (!empty($program?->group_url)) {
+                $message .= "*Join Group Sertifikasi:*\n";
+                $message .= "👥 {$program->group_url}\n\n";
+                $message .= "⚠️ *Penting:*\n";
+                $message .= "• Bergabung dengan group untuk mendapatkan info penting\n";
+                $message .= "• Ikuti jadwal program yang tersedia\n\n";
+            }
+
+            if (!empty($program?->socialization_group_url)) {
+                $message .= "*Join Group Sosialisasi:*\n";
+                $message .= "👥 {$program->socialization_group_url}\n\n";
+            }
+        }
+
         $message .= "Jika Anda memiliki pertanyaan, hubungi Admin kami via WhatsApp di *6287775764475*.\n\n";
         $message .= "Selamat belajar! 🚀\n";
         $message .= "*Level Up Accounting Support*";

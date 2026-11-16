@@ -35,7 +35,7 @@ interface CertificationProgram {
 }
 
 export default function HeroSection({ program }: { program: CertificationProgram }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : id;
     const deadlineDate = program.registration_deadline ? new Date(program.registration_deadline) : null;
 

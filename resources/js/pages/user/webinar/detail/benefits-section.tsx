@@ -14,7 +14,7 @@ function parseList(items?: string | null): string[] {
 }
 
 export default function BenefitsSection({ webinar }: { webinar: Webinar }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const benefitList = parseList(webinar.benefits);
 
     return (

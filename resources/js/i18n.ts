@@ -41,6 +41,7 @@ i18n
     resources,
     fallbackLng: 'id',
     defaultNS: 'common',
+    fallbackNS: ['common', 'user', 'home', 'profile', 'settings', 'auth'],
     interpolation: {
       escapeValue: false,
     },

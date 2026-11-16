@@ -600,7 +600,8 @@
         "promoValidateError": "An error occurred while validating promo code",
         "invalidReferral": "Invalid referral code",
         "referralValidateError": "An error occurred while validating referral code",
-        "createInvoiceFailed": "Failed to create invoice."
+        "createInvoiceFailed": "Failed to create invoice.",
+        "selectPaymentChannel": "Please select a payment method first!"
       }
     }
   },
@@ -806,6 +807,7 @@
       "location": "Location",
       "quota": "Quota",
       "duration": "Duration",
+      "durationLabel": "Duration",
       "deadline": "Deadline",
       "trusted": "Trusted",
       "secure": "Secure",
@@ -958,7 +960,8 @@
         "fileTooLarge": "File size cannot exceed 2MB",
         "fileMustBeImage": "File must be an image (JPG, PNG, etc.)",
         "uploadAllProof": "Please upload all required proofs!",
-        "fileUploaded": "File uploaded successfully."
+        "fileUploaded": "File uploaded successfully.",
+        "selectPaymentChannel": "Please select a payment method first!"
       }
     },
     "tabs": {
@@ -1238,7 +1241,8 @@
         "phoneRequired": "Your profile is incomplete! Please fill in your phone number first.",
         "activeInstallmentOngoing": "You have an active installment transaction. Please continue your installment payment.",
         "paymentUrlNotReceived": "Payment URL was not received from the server.",
-        "fileUploaded": "File uploaded successfully."
+        "fileUploaded": "File uploaded successfully.",
+        "selectPaymentChannel": "Please select a payment method first!"
       }
     }
   },
@@ -1525,7 +1529,8 @@
         "activeInstallmentNotice": "You have an active installment transaction. Please proceed with your installment payments.",
         "installmentOverdue": "The installment payment deadline has passed.",
         "fullPaymentDisabled": "You have an active installment. Full payment is disabled.",
-        "enterCodeRequired": "Please enter the {{type}} code first"
+        "enterCodeRequired": "Please enter the {{type}} code first",
+        "selectPaymentChannel": "Please select a payment method first!"
       }
     }
   },
@@ -1594,6 +1599,8 @@
     },
     "detail": {
       "headTitle": "{{title}} - Certification Program",
+      "scholarshipBadge": "Scholarship Program",
+      "regularBadge": "Regular Program",
       "tabs": {
         "information": "Information",
         "informationShort": "Info",
@@ -1899,7 +1906,8 @@
       "promoInvalid": "Invalid promo code",
       "promoError": "An error occurred while validating the promo code",
       "referralInvalid": "Invalid referral code",
-      "referralError": "An error occurred while validating the referral code"
+      "referralError": "An error occurred while validating the referral code",
+      "mustSelectPaymentChannel": "Please select a payment method first."
     },
     "scholarshipApply": {
       "headTitle": "Apply for Scholarship - {{title}}",
@@ -2183,7 +2191,8 @@
         "selectScheduleRequired": "Please select a private class schedule first.",
         "termsRequired": "You must agree to the terms and conditions.",
         "incompleteProfileToast": "Your profile is incomplete! Please complete phone number, institution, and city first.",
-        "createInvoiceFailed": "Failed to generate payment invoice."
+        "createInvoiceFailed": "Failed to generate payment invoice.",
+        "selectPaymentChannel": "Please select a payment method first!"
       }
     }
   },

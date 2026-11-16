@@ -234,6 +234,9 @@ class CertificateController extends Controller
         ]);
 
         $data = $request->all();
+        if (!empty($data['issued_date'])) {
+            $data['issued_date'] = Carbon::parse($data['issued_date'])->setTimezone(config('app.timezone'))->format('Y-m-d');
+        }
         $programType = $request->program_type;
 
         // Handle is_independent flag
@@ -349,6 +352,9 @@ class CertificateController extends Controller
         ]);
 
         $data = $request->all();
+        if (!empty($data['issued_date'])) {
+            $data['issued_date'] = Carbon::parse($data['issued_date'])->setTimezone(config('app.timezone'))->format('Y-m-d');
+        }
         $programType = $request->program_type;
 
         // Handle is_independent flag

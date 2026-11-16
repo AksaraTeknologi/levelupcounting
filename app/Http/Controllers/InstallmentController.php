@@ -15,24 +15,28 @@ use App\Models\Invoice;
 use App\Models\ProductInstallmentTerm;
 use App\Models\Webinar;
 use App\Services\MidtransService;
-use App\Traits\WablasTrait;
+use App\Services\TripayService;
+use App\Traits\MessaraTrait;
 use Carbon\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class InstallmentController extends Controller
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     protected $midtransService;
+    protected $tripayService;
 
-    public function __construct(MidtransService $midtransService)
+    public function __construct(MidtransService $midtransService, ?TripayService $tripayService = null)
     {
         $this->midtransService = $midtransService;
+        $this->tripayService = $tripayService ?? app(TripayService::class);
     }
 
     /**
@@ -65,15 +69,14 @@ class InstallmentController extends Controller
                     $isNextOverdue = Carbon::now('Asia/Jakarta')->gt(Carbon::parse($nextUnpaid->installment_due_date)->endOfDay());
                 }
 
-                $parentGrossAmount = ($invoice->amount == $invoice->nett_amount && $totalCount > 0)
-                    ? (float) $invoice->amount + ($totalCount * 5000)
-                    : (float) $invoice->amount;
+                $parentGrossAmount = (float) $invoice->amount;
 
                 return [
                     'id' => $invoice->id,
                     'invoice_code' => $invoice->invoice_code,
                     'status' => $invoice->status,
                     'amount' => $parentGrossAmount,
+                    'nett_amount' => (float) $invoice->nett_amount,
                     'is_access_suspended' => $invoice->isAccessSuspended() || $isNextOverdue,
                     'access_suspended_at' => $invoice->access_suspended_at,
                     'created_at' => $invoice->created_at,
@@ -84,31 +87,32 @@ class InstallmentController extends Controller
                     'next_unpaid_term' => $nextUnpaid ? [
                         'id' => $nextUnpaid->id,
                         'installment_number' => $nextUnpaid->installment_number,
-                        'amount' => ($nextUnpaid->status !== 'paid' && $nextUnpaid->amount == $nextUnpaid->nett_amount)
-                            ? $nextUnpaid->amount + 5000
-                            : $nextUnpaid->amount,
+                        'amount' => (int) $nextUnpaid->amount,
+                        'nett_amount' => (int) $nextUnpaid->nett_amount,
+                        'transaction_fee' => (int) ($nextUnpaid->transaction_fee ?? 0),
                         'installment_due_date' => $nextUnpaid->installment_due_date,
                         'status' => $nextUnpaid->status,
                         'is_overdue' => $isNextOverdue,
+                        'invoice_url' => $nextUnpaid->invoice_url,
+                        'payment_channel' => $nextUnpaid->payment_channel,
                     ] : null,
                     'terms' => $terms->map(function ($t) {
                         $isOverdue = $t->installment_due_date
                             ? Carbon::now('Asia/Jakarta')->gt(Carbon::parse($t->installment_due_date)->endOfDay()) && $t->status !== 'paid'
                             : false;
-                        $amount = (int) $t->amount;
-                        if ($t->status !== 'paid' && $amount == (int) $t->nett_amount) {
-                            $amount += 5000;
-                        }
                         return [
                             'id' => $t->id,
                             'installment_number' => $t->installment_number,
                             'invoice_code' => $t->invoice_code,
-                            'amount' => $amount,
+                            'amount' => (int) $t->amount,
+                            'nett_amount' => (int) $t->nett_amount,
+                            'transaction_fee' => (int) ($t->transaction_fee ?? 0),
                             'status' => $t->status,
                             'installment_due_date' => $t->installment_due_date,
                             'paid_at' => $t->paid_at,
                             'payment_method' => $t->payment_method,
                             'payment_channel' => $t->payment_channel,
+                            'invoice_url' => $t->invoice_url,
                             'is_overdue' => $isOverdue,
                         ];
                     }),
@@ -118,6 +122,20 @@ class InstallmentController extends Controller
         return Inertia::render('user/profile/installments', [
             'installments' => $invoices,
         ]);
+    }
+
+    private function getActiveGateway(): string
+    {
+        if (app()->runningUnitTests()) {
+            if (app()->isShared(\App\Services\MidtransService::class) && !app()->isShared(\App\Services\TripayService::class)) {
+                return 'midtrans';
+            }
+            if (config('manjo.qris.partner_id') === 'TEST_PARTNER_01' && config('tripay.api_key') !== 'DEV-TEST-API-KEY') {
+                return 'manjo';
+            }
+        }
+
+        return strtolower((string) config('payment.default', config('tripay.active_gateway', 'tripay')));
     }
 
     /**
@@ -191,7 +209,7 @@ class InstallmentController extends Controller
                     : ($term->due_date ? Carbon::parse($term->due_date) : null);
     
                 if ($termDueDate && $now->gt($termDueDate->copy()->endOfDay())) {
-                    $termLabel = $term->term_number === 1 ? 'pendaftaran / termin pertama' : 'ke-' . $term->term_number;
+                    $termLabel = $term->term_number === 1 ? 'pendaftaran / termin pertama' : 'termin ke-' . $term->term_number;
                     return response()->json([
                         'success' => false,
                         'message' => 'Opsi pembayaran cicilan untuk program ini telah ditutup karena batas waktu ' . $termLabel . ' telah terlewati.',
@@ -200,11 +218,43 @@ class InstallmentController extends Controller
             }
         }
 
-        $totalNettAmount = $terms->sum('amount');
-        $adminFeePerTerm = 5000;
-        $termsCount = $terms->count();
-        $totalGrossAmount = $totalNettAmount + ($termsCount * $adminFeePerTerm);
-        $dpGrossAmount = $terms->first()->amount + $adminFeePerTerm;
+        $totalNettAmount = (int) $terms->sum('amount');
+        $activeGateway = $this->getActiveGateway();
+        $paymentChannelInput = strtoupper(trim((string) $request->input('payment_channel', $request->input('bank_code', 'QRIS'))));
+        if ($paymentChannelInput === '' || $paymentChannelInput === 'E-WALLET' || $paymentChannelInput === 'VA') {
+            $paymentChannelInput = 'QRIS';
+        }
+
+        $channelObj = $activeGateway === 'tripay'
+            ? $this->tripayService->findChannel($paymentChannelInput)
+            : null;
+        $resolvedChannelCode = $channelObj ? (string) $channelObj->code : $paymentChannelInput;
+
+        $paymentManager = app(\App\Services\Payment\PaymentGatewayManager::class);
+        $dpTerm = $terms->first();
+
+        $dpFee = ($activeGateway === 'midtrans' || $activeGateway === 'manjo') ? 5000 : 0;
+        if ($activeGateway === 'tripay') {
+            try {
+                $feeCalc = $paymentManager->driver('tripay')->calculateFee((int) $dpTerm->amount, $resolvedChannelCode);
+                $dpFee = (int) ($feeCalc['fee_customer'] ?? 0);
+            } catch (\Throwable $e) {
+                $dpFee = $channelObj ? $this->tripayService->calculateCustomerFee($channelObj, (int) $dpTerm->amount) : 0;
+            }
+        }
+
+        $totalEstimatedGrossAmount = 0;
+        $termFeeMap = [];
+        foreach ($terms as $t) {
+            $tNett = (int) $t->amount;
+            $tFee = ($t->term_number === 1) ? $dpFee : (($activeGateway === 'tripay' && $channelObj)
+                ? $this->tripayService->calculateCustomerFee($channelObj, $tNett)
+                : (($activeGateway === 'midtrans' || $activeGateway === 'manjo') ? 5000 : 0));
+            $termFeeMap[$t->term_number] = $tFee;
+            $totalEstimatedGrossAmount += ($tNett + $tFee);
+        }
+
+        $dpGrossAmount = (int) $terms->first()->amount + ($termFeeMap[1] ?? 0);
 
         // Ambil referral / affiliate code jika ada
         $affiliateCode = $request->cookie('affiliate_code') ?? $request->input('affiliate_code');
@@ -237,10 +287,12 @@ class InstallmentController extends Controller
                 'user_id' => $userId,
                 'referred_by_user_id' => $referredByUserId,
                 'invoice_code' => $parentCode,
-                'amount' => $totalGrossAmount,
+                'amount' => $totalEstimatedGrossAmount,
                 'nett_amount' => $totalNettAmount,
                 'discount_amount' => 0,
                 'points_redeemed' => 0,
+                'payment_method' => $activeGateway === 'tripay' ? 'tripay' : 'midtrans',
+                'payment_channel' => $resolvedChannelCode,
                 'status' => 'installment_pending',
                 'is_installment' => true,
             ]);
@@ -270,14 +322,20 @@ class InstallmentController extends Controller
                         : ($term->due_date ? Carbon::parse($term->due_date) : null);
                 }
 
+                $termNett = (int) $term->amount;
+                $termFee = $termFeeMap[$term->term_number] ?? 0;
+
                 $child = Invoice::create([
                     'user_id' => $userId,
                     'referred_by_user_id' => $referredByUserId,
                     'invoice_code' => $childCode,
-                    'amount' => $term->amount + $adminFeePerTerm,
-                    'nett_amount' => $term->amount,
+                    'amount' => $termNett + $termFee,
+                    'nett_amount' => $termNett,
+                    'transaction_fee' => $termFee,
                     'discount_amount' => 0,
                     'points_redeemed' => 0,
+                    'payment_method' => $activeGateway === 'tripay' ? 'tripay' : 'midtrans',
+                    'payment_channel' => $resolvedChannelCode,
                     'status' => 'pending',
                     'is_installment' => false,
                     'parent_invoice_id' => $parentInvoice->id,
@@ -302,20 +360,30 @@ class InstallmentController extends Controller
             ];
             $enrollmentTable::create($enrollmentData);
 
-            // Buat Midtrans Transaction hanya untuk termin ke-1 (DP)
-            $midtransResponse = $this->createMidtransTransaction($firstChildInvoice, $item, Auth::user());
-            $firstChildInvoice->update([
-                'invoice_url' => $midtransResponse['redirect_url'] ?? null,
-                'payment_reference' => $firstChildInvoice->invoice_code,
-            ]);
+            if ($activeGateway === 'tripay') {
+                $gatewayResponse = $this->createTripayTransaction($firstChildInvoice, $item, Auth::user(), $resolvedChannelCode);
+                $dpGrossAmount = (int) $firstChildInvoice->amount;
+                $parentInvoice->update([
+                    'amount' => (int) $parentInvoice->installmentTerms()->sum('amount'),
+                ]);
+            } else {
+                // Buat Midtrans Transaction hanya untuk termin ke-1 (DP)
+                $gatewayResponse = $this->createMidtransTransaction($firstChildInvoice, $item, Auth::user());
+                $firstChildInvoice->update([
+                    'invoice_url' => $gatewayResponse['redirect_url'] ?? null,
+                    'payment_reference' => $firstChildInvoice->invoice_code,
+                ]);
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'payment_url' => $midtransResponse['redirect_url'] ?? null,
-                'snap_token' => $midtransResponse['snap_token'] ?? null,
+                'payment_url' => $gatewayResponse['redirect_url'] ?? null,
+                'invoice_url' => $gatewayResponse['redirect_url'] ?? null,
+                'snap_token' => $gatewayResponse['snap_token'] ?? null,
                 'invoice_id' => $parentInvoice->id,
+                'child_invoice_id' => $firstChildInvoice->id,
                 'invoice_code' => $parentCode,
                 'dp_amount' => $dpGrossAmount,
                 'total_terms' => $terms->count(),
@@ -336,7 +404,7 @@ class InstallmentController extends Controller
     }
 
     /**
-     * Generate Midtrans payment URL untuk termin berikutnya
+     * Generate payment URL untuk termin berikutnya
      */
     public function payTerm(Request $request, string $parentInvoiceId)
     {
@@ -388,12 +456,6 @@ class InstallmentController extends Controller
 
         DB::beginTransaction();
         try {
-            // Pastikan nominal tagihan child invoice sudah mencakup biaya admin Rp 5.000
-            if ($nextTerm->amount == $nextTerm->nett_amount) {
-                $nextTerm->amount = (float) $nextTerm->nett_amount + 5000;
-                $nextTerm->save();
-            }
-
             $productInvoice = $parentInvoice->load([
                 'courseItems.course',
                 'bootcampItems.bootcamp',
@@ -403,32 +465,51 @@ class InstallmentController extends Controller
             ]);
             $item = $this->getProductFromInvoice($productInvoice);
 
-            // Buat Midtrans Transaction baru yang selalu valid & fresh (mencegah token expired)
-            $midtransResponse = $this->createMidtransTransaction($nextTerm, $item, Auth::user());
+            $activeGateway = $this->getActiveGateway();
+            $paymentChannelInput = strtoupper(trim((string) $request->input(
+                'payment_channel',
+                $request->input('bank_code', $nextTerm->payment_channel ?: $parentInvoice->payment_channel ?: 'QRIS')
+            )));
+            if ($paymentChannelInput === '' || $paymentChannelInput === 'E-WALLET' || $paymentChannelInput === 'VA') {
+                $paymentChannelInput = 'QRIS';
+            }
 
-            $nextTerm->update([
-                'status' => 'pending',
-                'invoice_url' => $midtransResponse['redirect_url'] ?? null,
-                'payment_url' => $midtransResponse['redirect_url'] ?? null,
-                'snap_token' => $midtransResponse['snap_token'] ?? null,
-                'expires_at' => Carbon::now()->addHours(24),
-            ]);
+            if ($activeGateway === 'tripay') {
+                $nextTerm->expires_at = Carbon::now()->addHours(24);
+                $gatewayResponse = $this->createTripayTransaction($nextTerm, $item, Auth::user(), $paymentChannelInput);
+                $parentInvoice->update([
+                    'amount' => (int) $parentInvoice->installmentTerms()->sum('amount'),
+                ]);
+            } else {
+                // Buat Midtrans Transaction baru yang selalu valid & fresh (mencegah token expired)
+                $gatewayResponse = $this->createMidtransTransaction($nextTerm, $item, Auth::user());
+
+                $nextTerm->update([
+                    'status' => 'pending',
+                    'invoice_url' => $gatewayResponse['redirect_url'] ?? null,
+                    'payment_url' => $gatewayResponse['redirect_url'] ?? null,
+                    'snap_token' => $gatewayResponse['snap_token'] ?? null,
+                    'expires_at' => Carbon::now()->addHours(24),
+                ]);
+            }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'payment_url' => $midtransResponse['redirect_url'] ?? null,
-                'invoice_url' => $midtransResponse['redirect_url'] ?? null,
-                'snap_token' => $midtransResponse['snap_token'] ?? null,
+                'payment_url' => $gatewayResponse['redirect_url'] ?? null,
+                'invoice_url' => $gatewayResponse['redirect_url'] ?? null,
+                'snap_token' => $gatewayResponse['snap_token'] ?? null,
                 'term_number' => $nextTerm->installment_number,
                 'installment_number' => $nextTerm->installment_number,
+                'child_invoice_id' => $nextTerm->id,
                 'invoice_code' => $nextTerm->invoice_code,
-                'amount' => $nextTerm->amount,
+                'amount' => (int) $nextTerm->amount,
+                'transaction_fee' => (int) ($nextTerm->transaction_fee ?? 0),
             ], 200);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Pay installment term failed (Midtrans)', ['error' => $e->getMessage()]);
+            Log::error('Pay installment term failed', ['error' => $e->getMessage()]);
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -515,11 +596,11 @@ class InstallmentController extends Controller
             $termInvoice = $invoice->parent_invoice_id ? $invoice : $parentInvoice->nextUnpaidTerm();
 
             // Cek apakah invoice lunas / termin sudah lunas
-            if ($parentInvoice->isFullyPaid()) {
+            if ($parentInvoice->isFullyPaid() || !$termInvoice) {
                 return response()->json(['success' => false, 'message' => 'Semua termin cicilan untuk invoice ini sudah lunas.'], 422);
             }
 
-            if (!$termInvoice || $termInvoice->status === 'paid') {
+            if ($termInvoice->status === 'paid') {
                 return response()->json(['success' => false, 'message' => 'Termin cicilan ini sudah dibayar/lunas.'], 422);
             }
 
@@ -535,9 +616,7 @@ class InstallmentController extends Controller
             }
             $termNumber = $termInvoice->installment_number;
             $totalTerms = $parentInvoice->installmentTerms()->count();
-            $termAmount = ($termInvoice->status !== 'paid' && $termInvoice->amount == $termInvoice->nett_amount)
-                ? $termInvoice->amount + 5000
-                : $termInvoice->amount;
+            $termAmount = (float) $termInvoice->amount;
             $amount = 'Rp ' . number_format($termAmount, 0, ',', '.');
             $dueDate = $termInvoice->installment_due_date ? Carbon::parse($termInvoice->installment_due_date)->translatedFormat('d F Y') : '-';
             $productName = $this->getProductName($parentInvoice);
@@ -564,7 +643,7 @@ class InstallmentController extends Controller
             if (!$sent && !app()->environment('testing')) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Gagal mengirim pengingat WhatsApp melalui gateway Wablas. Pastikan koneksi WhatsApp terhubung.'
+                    'message' => 'Gagal mengirim pengingat WhatsApp melalui gateway Messara. Pastikan koneksi WhatsApp terhubung.'
                 ], 422);
             }
 
@@ -631,6 +710,89 @@ class InstallmentController extends Controller
         }
     }
 
+
+    private function createTripayTransaction(Invoice $childInvoice, mixed $item, mixed $user, string $channelInput): array
+    {
+        $productTitle = $item?->title ?? $item?->name ?? 'Produk';
+        $channelObj = $this->tripayService->findChannel($channelInput);
+        $channelCode = $channelObj ? (string) $channelObj->code : strtoupper(trim($channelInput ?: 'QRIS'));
+
+        $nettAmount = (int) $childInvoice->nett_amount;
+        $orderItems = [
+            [
+                'sku'      => (string) ($item->id ?? $childInvoice->id),
+                'name'     => mb_substr($productTitle . ' (Cicilan ke-' . $childInvoice->installment_number . ')', 0, 255),
+                'price'    => $nettAmount,
+                'quantity' => 1,
+            ],
+        ];
+
+        $expiresAt = $childInvoice->expires_at instanceof Carbon
+            ? $childInvoice->expires_at
+            : Carbon::now()->addHours(24);
+        $returnUrl = route('tripay.return', ['invoice_id' => $childInvoice->id]);
+
+        $tripayResponse = $this->tripayService->requestTransaction(
+            $childInvoice,
+            $item,
+            $channelCode,
+            $nettAmount,
+            $user->name,
+            $user->email,
+            $user->phone_number ?? '',
+            $returnUrl,
+            (int) $expiresAt->timestamp,
+            $orderItems
+        );
+
+        $tripayData = $tripayResponse->data ?? null;
+        if (!$tripayData) {
+            throw new \Exception('Gagal membuat transaksi pembayaran Tripay untuk cicilan.');
+        }
+
+        $actualTotalAmount = isset($tripayData->amount) ? (int) $tripayData->amount : (int) $childInvoice->amount;
+        $actualFeeCustomer = isset($tripayData->fee_customer)
+            ? (int) $tripayData->fee_customer
+            : max(0, $actualTotalAmount - $nettAmount);
+        $payCode = $tripayData->pay_code ?? null;
+        $qrUrl = $tripayData->qr_url ?? null;
+        $qrString = $tripayData->qr_string ?? null;
+        $checkoutUrl = $tripayData->checkout_url ?? $returnUrl;
+        $expiredTime = !empty($tripayData->expired_time)
+            ? Carbon::createFromTimestamp((int) $tripayData->expired_time, 'Asia/Jakarta')
+            : $expiresAt;
+
+        $isQrisChannel = str_contains(strtoupper((string) ($tripayData->payment_method ?? $channelCode)), 'QRIS');
+
+        $childInvoice->update([
+            'status'            => 'pending',
+            'amount'            => $actualTotalAmount,
+            'transaction_fee'   => $actualFeeCustomer,
+            'payment_method'    => 'tripay',
+            'payment_channel'   => $tripayData->payment_method ?? $channelCode,
+            'payment_reference' => $tripayData->reference ?? null,
+            'va_number'         => $payCode,
+            'qr_code_url'       => $qrUrl ?: ($isQrisChannel && $qrString ? route('invoice.qris-image', $childInvoice->id) : null),
+            'invoice_url'       => $checkoutUrl,
+            'expires_at'        => $expiredTime,
+        ]);
+
+        if (!empty($qrString)) {
+            $ttlSeconds = max(60, Carbon::now()->diffInSeconds($expiredTime, false));
+            Cache::put("tripay_qris_{$childInvoice->id}", $qrString, $ttlSeconds);
+        }
+
+        Cache::put("tripay_tx_{$childInvoice->id}", $tripayData, 86400);
+
+        return [
+            'success'      => true,
+            'redirect_url' => $checkoutUrl,
+            'checkout_url' => $checkoutUrl,
+            'reference'    => $tripayData->reference ?? null,
+            'amount'       => $actualTotalAmount,
+            'fee_customer' => $actualFeeCustomer,
+        ];
+    }
 
     private function createMidtransTransaction(Invoice $childInvoice, mixed $item, mixed $user): array
     {

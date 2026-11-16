@@ -25,7 +25,7 @@ function parseList(items?: string | null): ListItem[] {
 }
 
 export default function RequirementSection({ program }: { program: CertificationProgram }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     if (!program.terms_conditions && !(program.type === 'scholarship' && program.scholarship_flow)) return null;
 
     const termsList = parseList(program.terms_conditions);

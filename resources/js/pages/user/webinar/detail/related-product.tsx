@@ -22,7 +22,7 @@ interface RelatedProductProps {
 }
 
 export default function RelatedProduct({ relatedWebinars, myWebinarIds }: RelatedProductProps) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
 
     if (!relatedWebinars || relatedWebinars.length === 0) {
         return null;

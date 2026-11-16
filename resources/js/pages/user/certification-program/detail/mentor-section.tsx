@@ -17,7 +17,7 @@ interface CertificationProgram {
 }
 
 export default function MentorSection({ program }: { program: CertificationProgram }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const getInitials = useInitials();
     const mentors = program.mentors ?? [];
 

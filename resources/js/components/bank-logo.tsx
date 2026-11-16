@@ -2,28 +2,37 @@ import React, { useState } from 'react';
 
 interface BankLogoProps {
     bankCode: string;
+    iconUrl?: string | null;
     className?: string;
     size?: 'sm' | 'md' | 'lg';
 }
 
 const BANK_IMAGE_MAP: Record<string, string> = {
     QRIS: '/assets/images/banks/qris.webp',
+    QRISC: '/assets/images/banks/qris.webp',
+    QRIS2: '/assets/images/banks/qris.webp',
     BMRI: '/assets/images/banks/mandiri.webp',
     MANDIRI: '/assets/images/banks/mandiri.webp',
+    MANDIRIVA: '/assets/images/banks/mandiri.webp',
     BNIA: '/assets/images/banks/cimb.svg',
     CIMB: '/assets/images/banks/cimb.svg',
     CIMB_NIAGA: '/assets/images/banks/cimb.svg',
+    CIMBVA: '/assets/images/banks/cimb.svg',
     BBBA: '/assets/images/banks/permata.webp',
     PERMATA: '/assets/images/banks/permata.webp',
+    PERMATAVA: '/assets/images/banks/permata.webp',
     BNIN: '/assets/images/banks/permata.webp',
     BRIN: '/assets/images/banks/bri.png',
     BRI: '/assets/images/banks/bri.png',
+    BRIVA: '/assets/images/banks/bri.png',
     BSYI: '/assets/images/banks/bsi.webp',
     BSI: '/assets/images/banks/bsi.webp',
+    BSIVA: '/assets/images/banks/bsi.webp',
     BCA: '/assets/images/banks/bca.webp',
+    BCAVA: '/assets/images/banks/bca.webp',
 };
 
-export default function BankLogo({ bankCode, className = '', size = 'md' }: BankLogoProps) {
+export default function BankLogo({ bankCode, iconUrl = null, className = '', size = 'md' }: BankLogoProps) {
     const code = (bankCode || '').toUpperCase().trim();
     const [imageError, setImageError] = useState(false);
 
@@ -36,8 +45,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
 
     const containerClass = `inline-flex items-center justify-center shrink-0 rounded bg-white p-1 shadow-xs border border-slate-200/80 dark:border-slate-700/60 dark:bg-slate-900 ${className}`;
 
-    // If there is an uploaded image asset and it hasn't errored, render it
-    const imageSrc = BANK_IMAGE_MAP[code];
+    // If there is an uploaded image asset or Tripay icon_url and it hasn't errored, render it
+    const imageSrc = BANK_IMAGE_MAP[code] || iconUrl || undefined;
     if (imageSrc && !imageError) {
         return (
             <div className={containerClass}>
@@ -53,7 +62,7 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
     }
 
     // 1. QRIS Fallback SVG
-    if (code === 'QRIS') {
+    if (code === 'QRIS' || code === 'QRISC' || code === 'QRIS2') {
         return (
             <div className={containerClass}>
                 <svg
@@ -73,8 +82,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 2. Bank BCA (BBBA / BCA) Fallback SVG
-    if (code === 'BBBA' || code === 'BCA') {
+    // 2. Bank BCA (BBBA / BCA / BCAVA) Fallback SVG
+    if (code === 'BBBA' || code === 'BCA' || code === 'BCAVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -94,8 +103,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 3. Bank Mandiri (BMRI / MANDIRI) Fallback SVG
-    if (code === 'BMRI' || code === 'MANDIRI') {
+    // 3. Bank Mandiri (BMRI / MANDIRI / MANDIRIVA) Fallback SVG
+    if (code === 'BMRI' || code === 'MANDIRI' || code === 'MANDIRIVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -114,8 +123,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 4. Bank BRI (BRIN / BRI) Fallback SVG
-    if (code === 'BRIN' || code === 'BRI') {
+    // 4. Bank BRI (BRIN / BRI / BRIVA) Fallback SVG
+    if (code === 'BRIN' || code === 'BRI' || code === 'BRIVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -135,8 +144,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 5. Bank BNI (BNIA / BNI) Fallback SVG
-    if (code === 'BNIA' || code === 'BNI') {
+    // 5. Bank BNI (BNIA / BNI / BNIVA) Fallback SVG
+    if (code === 'BNIA' || code === 'BNI' || code === 'BNIVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -155,8 +164,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 6. Bank Syariah Indonesia (BSYI / BSI) Fallback SVG
-    if (code === 'BSYI' || code === 'BSI') {
+    // 6. Bank Syariah Indonesia (BSYI / BSI / BSIVA) Fallback SVG
+    if (code === 'BSYI' || code === 'BSI' || code === 'BSIVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -175,8 +184,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 7. Bank Danamon (BDIN / DANAMON) Fallback SVG
-    if (code === 'BDIN' || code === 'DANAMON') {
+    // 7. Bank Danamon (BDIN / DANAMON / DANAMONVA) Fallback SVG
+    if (code === 'BDIN' || code === 'DANAMON' || code === 'DANAMONVA') {
         return (
             <div className={containerClass}>
                 <svg
@@ -195,8 +204,8 @@ export default function BankLogo({ bankCode, className = '', size = 'md' }: Bank
         );
     }
 
-    // 8. Bank Permata (BNIN / PERMATA) Fallback SVG
-    if (code === 'BNIN' || code === 'PERMATA') {
+    // 8. Bank Permata (BNIN / PERMATA / PERMATAVA) Fallback SVG
+    if (code === 'BNIN' || code === 'PERMATA' || code === 'PERMATAVA') {
         return (
             <div className={containerClass}>
                 <svg

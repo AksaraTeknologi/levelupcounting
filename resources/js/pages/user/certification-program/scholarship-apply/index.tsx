@@ -45,7 +45,7 @@ const createFormSchema = (t: (key: string) => string) =>
 type FormValues = z.infer<ReturnType<typeof createFormSchema>>;
 
 export default function ScholarshipApply({ program }: { program: Program }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const [isLoading, setIsLoading] = useState(false);
     const [ktmPreview, setKtmPreview] = useState<string | null>(null);
     const [transcriptPreview, setTranscriptPreview] = useState<string | null>(null);

@@ -141,63 +141,72 @@ export default function CertificationProgramDetail({ invoice, programItem, activ
     return (
         <UserLayout>
             <Head title={`${program.title} - ${t('certifications.title')}`} />
-            <section className="to-background from-background via-tertiary dark:via-background dark:to-background relative bg-gradient-to-b py-12 text-gray-900 dark:text-white">
-                <div className="pointer-events-none absolute top-1/2 left-1/2 z-0 flex -translate-x-1/2 -translate-y-1/2 animate-spin items-center gap-8 duration-[10s]">
-                    <div className="bg-primary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                    <div className="bg-secondary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                </div>
-                <div className="relative mx-auto max-w-7xl px-4 text-center">
-                    <Button className="top-0 left-4 mb-4 rounded-full md:absolute md:mb-0" variant="secondary" asChild>
+            <section className="mx-auto w-full max-w-7xl px-4 pt-6 pb-6">
+                <div className="mb-4">
+                    <Button variant="ghost" size="sm" className="gap-2 px-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" asChild>
                         <Link href="/profile/my-certification-programs">
-                            <ArrowLeft /> {t('certifications.detail.backToCertifications')}
+                            <ArrowLeft className="h-4 w-4" /> {t('certifications.detail.backToCertifications')}
                         </Link>
                     </Button>
-                    <div className="col-span-2">
-                        <div className="flex flex-col items-center justify-center md:flex-row md:gap-4">
-                            <span className="text-primary border-primary bg-background mb-4 w-fit rounded-full border bg-gradient-to-t from-[#D9E5FF] to-white px-4 py-1 text-sm font-medium shadow-xs">
-                                📌 {isScholarship ? t('certifications.scholarship') : t('certifications.regular')}
-                            </span>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                        <div>
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                                <span
+                                    className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${
+                                        isScholarship
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                            : 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300'
+                                    }`}
+                                >
+                                    {isScholarship ? t('certifications.detail.scholarshipTrack') : t('certifications.detail.regularTrack')}
+                                </span>
+                                {program.category?.name && (
+                                    <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-300">
+                                        {program.category.name}
+                                    </span>
+                                )}
+                            </div>
+
+                            <h1 className="text-2xl leading-snug font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+                                {program.title}
+                            </h1>
                         </div>
 
-                        <h1 className="mx-auto mb-4 max-w-2xl text-4xl leading-tight font-bold italic sm:text-5xl">{program.title}</h1>
-
-                        <div className="flex flex-col items-center justify-center gap-2 sm:flex-row sm:justify-center sm:gap-4">
-                            <Badge
-                                className={
-                                    isScholarship ? 'border-emerald-300 bg-emerald-500 text-white' : 'border-amber-300 bg-amber-500 text-white'
-                                }
-                            >
-                                {isScholarship ? t('certifications.detail.scholarshipTrack') : t('certifications.detail.regularTrack')}
-                            </Badge>
-                            <Button asChild size="sm" variant="secondary">
+                        <div className="shrink-0">
+                            <Button asChild size="sm" variant="outline">
                                 <Link href={route('certification-programs.detail', { program: program.slug })}>
                                     <ExternalLink className="mr-2 h-4 w-4" />
                                     {t('certifications.detail.viewPublicDetail')}
                                 </Link>
                             </Button>
                         </div>
-
-                        {invoice.is_access_suspended ? (
-                            <div className="mt-4 flex justify-center">
-                                <span className="rounded-lg border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-300">
-                                    {t('certifications.detail.suspendedNotice')}
-                                </span>
-                            </div>
-                        ) : invoice.is_installment && !invoice.is_fully_paid ? (
-                            <div className="mt-4 flex justify-center w-full">
-                                <ProfileInstallmentAction
-                                    variant="banner"
-                                    activeInstallment={active_installment}
-                                    invoiceId={invoice.id}
-                                    isInstallment={invoice.is_installment}
-                                    isFullyPaid={invoice.is_fully_paid}
-                                    isSuspended={invoice.is_access_suspended}
-                                    paidTerms={invoice.paid_terms}
-                                    totalTerms={invoice.total_terms}
-                                />
-                            </div>
-                        ) : null}
                     </div>
+
+                    {(invoice.is_access_suspended || (invoice.is_installment && !invoice.is_fully_paid)) && (
+                        <div className="mt-5 border-t border-gray-100 pt-5 dark:border-zinc-800">
+                            {invoice.is_access_suspended ? (
+                                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+                                    {t('certifications.detail.suspendedNotice')}
+                                </div>
+                            ) : invoice.is_installment && !invoice.is_fully_paid ? (
+                                <div className="w-full">
+                                    <ProfileInstallmentAction
+                                        variant="banner"
+                                        activeInstallment={active_installment}
+                                        invoiceId={invoice.id}
+                                        isInstallment={invoice.is_installment}
+                                        isFullyPaid={invoice.is_fully_paid}
+                                        isSuspended={invoice.is_access_suspended}
+                                        paidTerms={invoice.paid_terms}
+                                        totalTerms={invoice.total_terms}
+                                    />
+                                </div>
+                            ) : null}
+                        </div>
+                    )}
                 </div>
             </section>
 

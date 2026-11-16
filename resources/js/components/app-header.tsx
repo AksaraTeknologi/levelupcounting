@@ -169,7 +169,12 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
         },
     ];
 
-    const isServicesActive = serviceItems.some((item) => page.url.startsWith(item.href)) || page.url.startsWith('/bundle');
+    const isServicesActive =
+        serviceItems.some((item) => page.url.startsWith(item.href)) ||
+        page.url.startsWith('/bundle') ||
+        page.url.startsWith('/certification-program');
+
+    const isInfoActive = page.url.startsWith('/article') || page.url.startsWith('/check-certificate');
 
     const isHomepage = page.url === '/' || page.url === '';
 
@@ -238,12 +243,18 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                     </div>
 
                     {/* Navigation Section with blue background & smooth curve */}
-                    <div className="bg-primary relative flex h-full items-center justify-end gap-3 pl-28 pr-4 sm:pr-6">
-                        {/* Curve separator (original shape: white shoulder at top, blue scoops in at bottom) */}
-                        <div className="text-background pointer-events-none absolute top-0 -left-2 h-full w-40">
-                            <svg viewBox="0 0 160 80" preserveAspectRatio="none" className="h-full w-full" aria-hidden="true">
-                                <path d="M0,0 H90 C70,0 45,80 0,80 Z" fill="currentColor" transform="scale(1,-1) translate(0,-80)" />
+                    <div className="relative flex h-full items-center justify-end gap-3 pl-28 pr-4 sm:pr-6">
+                        {/* Blue curved background (transparent on the bottom-left of the curve) */}
+                        <div className="pointer-events-none absolute inset-y-0 -left-2 right-0 flex">
+                            <svg
+                                viewBox="0 0 90 80"
+                                preserveAspectRatio="none"
+                                className="text-primary h-full w-[90px] shrink-0"
+                                aria-hidden="true"
+                            >
+                                <path d="M0,0 C45,0 70,80 90,80 L90,0 Z" fill="currentColor" />
                             </svg>
+                            <div className="bg-primary -ml-px h-full flex-1" />
                         </div>
                         {/* Background filler to the right viewport edge */}
                         <div className="bg-primary pointer-events-none absolute top-0 left-full h-full w-[200vw]" />
@@ -428,36 +439,48 @@ export function AppHeader({ breadcrumbs = [] }: AppHeaderProps) {
                                     </NavigationMenuContent>
                                 </NavigationMenuItem>
 
-                                {/* Artikel */}
+                                {/* Informasi Dropdown (Artikel & Cek Sertifikat) */}
                                 <NavigationMenuItem className="relative flex h-full items-center">
-                                    <NavigationMenuLink asChild>
-                                        <Link
-                                            href="/article"
-                                            className={cn(
-                                                'rounded-full border border-white/50 px-3.5 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold whitespace-nowrap transition-colors',
-                                                page.url.startsWith('/article') ? 'text-primary bg-white' : 'text-white hover:bg-white/20',
-                                            )}
-                                        >
-                                            {t('nav.articles', 'Artikel')}
-                                        </Link>
-                                    </NavigationMenuLink>
-                                </NavigationMenuItem>
-
-                                {/* Cek Sertifikat */}
-                                <NavigationMenuItem className="relative flex h-full items-center">
-                                    <NavigationMenuLink asChild>
-                                        <Link
-                                            href="/check-certificate"
-                                            className={cn(
-                                                'rounded-full border border-white/50 px-3.5 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold whitespace-nowrap transition-colors',
-                                                page.url.startsWith('/check-certificate')
-                                                    ? 'text-primary bg-white'
-                                                    : 'text-white hover:bg-white/20',
-                                            )}
-                                        >
-                                            {t('nav.checkCertificate', 'Cek Sertifikat')}
-                                        </Link>
-                                    </NavigationMenuLink>
+                                    <NavigationMenuTrigger
+                                        className={cn(
+                                            'rounded-full border border-white/50 bg-transparent px-3.5 xl:px-4 py-1.5 text-xs xl:text-sm font-semibold whitespace-nowrap transition-colors',
+                                            isInfoActive ? '!text-primary bg-white' : 'text-white hover:bg-white/20 hover:text-white',
+                                        )}
+                                    >
+                                        {t('nav.information', 'Informasi')}
+                                    </NavigationMenuTrigger>
+                                    <NavigationMenuContent>
+                                        <div className="w-[360px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl dark:border-white/10 dark:bg-zinc-950">
+                                            {/* Top accent strip */}
+                                            <div className="from-primary via-secondary h-1 w-full bg-gradient-to-r to-violet-500" />
+                                            <div className="p-4">
+                                                <p className="text-muted-foreground mb-3 flex items-center gap-1.5 text-[11px] font-bold tracking-widest uppercase">
+                                                    <Sparkles className="text-primary h-3 w-3" />
+                                                    {t('nav.informationAndTools', 'Informasi & Layanan')}
+                                                </p>
+                                                <ul className="space-y-1">
+                                                    <ListItem
+                                                        href="/article"
+                                                        title={t('nav.articles', 'Artikel')}
+                                                        icon={FileText}
+                                                        iconBg="bg-blue-50 dark:bg-blue-900/30"
+                                                        iconColor="text-blue-600"
+                                                    >
+                                                        {t('nav.articlesDesc', 'Baca artikel, tips, dan wawasan terbaru seputar akuntansi & perpajakan')}
+                                                    </ListItem>
+                                                    <ListItem
+                                                        href="/check-certificate"
+                                                        title={t('nav.checkCertificate', 'Cek Sertifikat')}
+                                                        icon={Award}
+                                                        iconBg="bg-amber-50 dark:bg-amber-900/30"
+                                                        iconColor="text-amber-600"
+                                                    >
+                                                        {t('nav.checkCertificateDesc', 'Lihat sertifikat Anda dengan email dan nomor WA')}
+                                                    </ListItem>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </NavigationMenuContent>
                                 </NavigationMenuItem>
 
                                 {/* Profil Saya (if logged in) */}

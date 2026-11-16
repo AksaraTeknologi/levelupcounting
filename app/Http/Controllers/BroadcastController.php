@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Broadcast;
 use App\Models\Category;
 use App\Models\User;
-use App\Traits\WablasTrait;
+use App\Traits\MessaraTrait;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -13,7 +13,7 @@ use Inertia\Inertia;
 
 class BroadcastController extends Controller
 {
-    use WablasTrait;
+    use MessaraTrait;
 
     public function index(Request $request)
     {
@@ -196,21 +196,21 @@ class BroadcastController extends Controller
         try {
             $sent = self::sendText($waData);
 
-            if ($request->input('broadcast_id')) {
-                $broadcast = Broadcast::find($request->input('broadcast_id'));
-                if ($broadcast) {
-                    $broadcast->update([
-                        'total_sent' => $broadcast->total_sent + $sentCount,
-                        'last_sent_at' => now(),
-                    ]);
-                }
-            }
-
             if ($sent) {
+                if ($request->input('broadcast_id')) {
+                    $broadcast = Broadcast::find($request->input('broadcast_id'));
+                    if ($broadcast) {
+                        $broadcast->update([
+                            'total_sent' => $broadcast->total_sent + $sentCount,
+                            'last_sent_at' => now(),
+                        ]);
+                    }
+                }
+
                 Log::info('Broadcast sent successfully', ['total_recipients' => $sentCount, 'range' => "{$from}-{$to}"]);
                 return back()->with('success', "Broadcast berhasil dikirim ke {$sentCount} pengguna (urutan {$from}-{$to} dari {$totalFiltered}).");
             } else {
-                return back()->with('error', 'Gagal mengirim broadcast. Periksa konfigurasi Wablas.');
+                return back()->with('error', 'Gagal mengirim broadcast. Periksa konfigurasi Messara.');
             }
         } catch (\Exception $e) {
             Log::error('Broadcast failed', ['error' => $e->getMessage()]);
@@ -255,9 +255,9 @@ class BroadcastController extends Controller
                     'total_sent' => $broadcast->total_sent + 1,
                     'last_sent_at' => now(),
                 ]);
-                return back()->with('success', "Pesan berhasil dikirim via Wablas ke {$user->name}.");
+                return back()->with('success', "Pesan berhasil dikirim via Messara ke {$user->name}.");
             } else {
-                return back()->with('error', 'Gagal mengirim pesan. Periksa konfigurasi Wablas.');
+                return back()->with('error', 'Gagal mengirim pesan. Periksa konfigurasi Messara.');
             }
         } catch (\Exception $e) {
             Log::error('Single broadcast failed', ['error' => $e->getMessage()]);

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export default function FeatureSection() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const [activeIndex, setActiveIndex] = useState(0);
 
     const items = [

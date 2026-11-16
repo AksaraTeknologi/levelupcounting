@@ -22,7 +22,7 @@ interface CertificationProgram {
 }
 
 export default function ScheduleInfoSection({ program }: { program: CertificationProgram }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : id;
     const schedules = program.schedules ?? [];
     if (schedules.length === 0) return null;

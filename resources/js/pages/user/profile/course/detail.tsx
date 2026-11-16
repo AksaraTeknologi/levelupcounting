@@ -180,22 +180,22 @@ export default function DetailMyCourse({
 
         if (!courseRating) {
             return (
-                <div className="mb-6 rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-blue-100 p-4 dark:border-blue-700 dark:from-blue-900/20 dark:to-blue-800/20">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-400 to-blue-600">
-                                <Star className="h-5 w-5 text-white" />
+                <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <div className="bg-primary/10 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-lg">
+                                <Star className="h-5 w-5" />
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.ratingCongratsTitle')}</h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.ratingCongratsTitle')}</h3>
+                                <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
                                     {t('courses.detail.ratingCongratsDesc')}
                                 </p>
                             </div>
                         </div>
                         <Button
                             size="sm"
-                            className="border-none bg-gradient-to-r from-blue-400 to-blue-600 text-white shadow-lg hover:from-blue-500 hover:to-blue-700"
+                            className="shrink-0"
                             onClick={() => setIsRatingDialogOpen(true)}
                         >
                             <Star className="mr-2 h-4 w-4" />
@@ -208,27 +208,27 @@ export default function DetailMyCourse({
 
         if (courseRating && !hasCertificate) {
             return (
-                <div className="mb-6 rounded-lg border border-yellow-200 bg-gradient-to-r from-yellow-50 to-yellow-100 p-4 dark:border-yellow-700 dark:from-yellow-900/20 dark:to-yellow-800/20">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-yellow-400 to-yellow-600">
-                                <Award className="h-5 w-5 text-white" />
+                <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                                <Award className="h-5 w-5" />
                             </div>
                             <div>
-                                <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.ratingThankTitle')}</h3>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.ratingThankTitle')}</h3>
+                                <p className="mt-0.5 text-xs text-gray-600 dark:text-gray-400">
                                     {!certificate
                                         ? t('courses.detail.certNotReady')
                                         : !isFullyPaid
                                           ? (isInstallment ? t('courses.detail.certPayInstallment') : t('courses.detail.certPayFull'))
                                           : t('courses.detail.certProcessing')}
                                 </p>
-                                <div className="mt-1 flex items-center gap-1">
+                                <div className="mt-1.5 flex items-center gap-1">
                                     <span className="text-xs text-gray-500">{t('courses.detail.yourRating')}</span>
                                     {[1, 2, 3, 4, 5].map((star) => (
                                         <Star
                                             key={star}
-                                            className={`h-3 w-3 ${star <= courseRating.rating ? 'fill-current text-yellow-400' : 'text-gray-300'}`}
+                                            className={`h-3.5 w-3.5 ${star <= courseRating.rating ? 'fill-current text-yellow-400' : 'text-gray-300'}`}
                                         />
                                     ))}
                                     <span className="ml-1 text-xs text-gray-500">({courseRating.rating}/5)</span>
@@ -238,7 +238,7 @@ export default function DetailMyCourse({
                         {isInstallment && !isFullyPaid ? (
                             <Button
                                 size="sm"
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 font-semibold"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 gap-1.5 font-semibold"
                                 onClick={handlePayCertInstallment}
                                 disabled={isPayingCert || isSuspended}
                                 id="btn-lunasi-sertifikat-course"
@@ -247,7 +247,7 @@ export default function DetailMyCourse({
                                 {isPayingCert ? t('courses.detail.redirectingButton') : t('courses.detail.payInstallmentNow')}
                             </Button>
                         ) : (
-                            <Button size="sm" disabled>
+                            <Button size="sm" variant="outline" className="shrink-0" disabled>
                                 <Download className="mr-2 h-4 w-4" />
                                 {!certificate
                                     ? t('courses.detail.certNotAvailable')
@@ -263,23 +263,23 @@ export default function DetailMyCourse({
 
         if (hasCertificate) {
             return (
-                <div className="mb-6 rounded-lg border border-green-200 bg-gradient-to-r from-green-50 to-green-100 p-6 dark:border-green-700 dark:from-green-900/20 dark:to-green-800/20">
-                    <div className="mb-4 flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-r from-green-400 to-green-600">
-                            <Award className="h-5 w-5 text-white" />
+                <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50/40 p-5 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                    <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400">
+                            <Award className="h-5 w-5" />
                         </div>
                         <div>
-                            <h3 className="font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.certReadyTitle')}</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{t('courses.detail.certReadyTitle')}</h3>
+                            <p className="mt-0.5 text-sm text-gray-600 dark:text-gray-400">
                                 {t('courses.detail.certReadyDesc')}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex justify-between">
+                    <div className="mt-4 flex flex-col justify-between gap-4 border-t border-emerald-200/60 pt-4 sm:flex-row sm:items-center dark:border-emerald-900/40">
                         {certificateParticipant && (
-                            <div className="mt-4">
-                                <p className="text-sm text-gray-700 dark:text-gray-300">
+                            <div>
+                                <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
                                     {t('courses.detail.certNumber', {
                                         number: `${String(certificateParticipant.certificate_number).padStart(4, '0')}/${certificate?.certificate_number}`,
                                     })}
@@ -288,24 +288,24 @@ export default function DetailMyCourse({
                                     href={route('certificate.participant.detail', {
                                         code: certificateParticipant.certificate_code,
                                     })}
-                                    className="text-sm text-green-600 underline hover:text-green-800 dark:text-green-400"
+                                    className="text-primary mt-0.5 inline-block text-xs underline hover:opacity-80"
                                 >
                                     {t('courses.detail.viewCertDetail')}
                                 </Link>
                             </div>
                         )}
 
-                        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                            <Button className="w-full" asChild>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            <Button size="sm" className="w-full" asChild>
                                 <a href={route('profile.course.certificate', { course: courseData.slug })} target="_blank">
-                                    <Download size={16} className="mr-2" />
+                                    <Download size={15} className="mr-2" />
                                     {t('courses.detail.downloadCert')}
                                 </a>
                             </Button>
 
-                            <Button variant="outline" className="w-full" asChild>
+                            <Button size="sm" variant="outline" className="w-full bg-white dark:bg-zinc-900" asChild>
                                 <a href={route('profile.course.certificate.preview', { course: courseData.slug })} target="_blank">
-                                    <Eye size={16} className="mr-2" />
+                                    <Eye size={15} className="mr-2" />
                                     {t('courses.detail.previewCert')}
                                 </a>
                             </Button>
@@ -334,59 +334,64 @@ export default function DetailMyCourse({
                 </div>
             ) : (
                 <>
-                    <section className="to-background from-background via-tertiary dark:via-background dark:to-background relative bg-gradient-to-b py-12 text-gray-900 dark:text-white">
-                        <div className="pointer-events-none absolute top-1/2 left-1/2 z-0 flex -translate-x-1/2 -translate-y-1/2 animate-spin items-center gap-8 duration-[10s]">
-                            <div className="bg-primary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                            <div className="bg-secondary h-[300px] w-[300px] rounded-full blur-[200px]" />
-                        </div>
-                        <div className="relative mx-auto max-w-7xl px-4 text-center">
-                            <Button className="top-0 left-4 mb-4 rounded-full md:absolute md:mb-0" variant="secondary" asChild>
+                    <section className="mx-auto w-full max-w-7xl px-4 pt-6 pb-6">
+                        <div className="mb-4">
+                            <Button variant="ghost" size="sm" className="gap-2 px-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white" asChild>
                                 <Link href="/profile/my-courses">
-                                    <ArrowLeft /> {t('courses.detail.backToCourses')}
+                                    <ArrowLeft className="h-4 w-4" /> {t('courses.detail.backToCourses')}
                                 </Link>
                             </Button>
-                            <div className="col-span-2">
-                                <div className="flex flex-col items-center justify-center md:flex-row md:gap-4">
-                                    <span className="text-primary border-primary bg-background mb-4 w-fit rounded-full border bg-gradient-to-t from-[#D9E5FF] to-white px-4 py-1 text-sm font-medium shadow-xs">
-                                        {courseItem &&
-                                            t('courses.detail.enrolledIn', {
-                                                date: new Date(courseItem.created_at).toLocaleDateString(dateLocale, {
-                                                    month: 'long',
-                                                    year: 'numeric',
-                                                }),
-                                            })}
+                        </div>
+
+                        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8 dark:border-zinc-800 dark:bg-zinc-900">
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                                <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
+                                    {courseItem &&
+                                        t('courses.detail.enrolledIn', {
+                                            date: new Date(courseItem.created_at).toLocaleDateString(dateLocale, {
+                                                month: 'long',
+                                                year: 'numeric',
+                                            }),
+                                        })}
+                                </span>
+                                <span className="inline-flex items-center rounded-md border border-gray-200 bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-300">
+                                    {t('courses.detail.levelBadge')} <span className="ml-1 capitalize">{courseData.level}</span>
+                                </span>
+                                {hasCertificate ? (
+                                    <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                                        <Award size={14} />
+                                        {t('courses.detail.certAvailable')}
                                     </span>
-                                    <span className="text-secondary border-secondary bg-background mb-4 inline-block rounded-full border bg-gradient-to-t from-[#FED6AD] to-white px-3 py-1 text-sm font-medium shadow-xs hover:text-[#FF925B]">
-                                        {t('courses.detail.levelBadge')} <span className="capitalize">{courseData.level}</span>
-                                    </span>
-                                    {hasCertificate ? (
-                                        <span className="mb-4 flex w-fit items-center gap-2 rounded-full border border-green-800 bg-green-100 px-4 py-1 text-sm font-medium text-green-800 shadow-xs">
-                                            <Award size={16} />
-                                            {t('courses.detail.certAvailable')}
-                                        </span>
-                                    ) : null}
-                                </div>
+                                ) : null}
+                            </div>
 
-                                <h1 className="mx-auto mb-4 max-w-2xl text-4xl leading-tight font-bold italic sm:text-5xl">{courseData.title}</h1>
+                            <h1 className="text-2xl leading-snug font-bold tracking-tight text-gray-900 sm:text-3xl dark:text-white">
+                                {courseData.title}
+                            </h1>
 
-                                <p className="mb-6 text-lg text-gray-600 dark:text-gray-400">{courseData.description}</p>
+                            {courseData.description && (
+                                <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-600 sm:text-base dark:text-gray-400">
+                                    {courseData.description}
+                                </p>
+                            )}
 
-                                <div className="flex items-center justify-center gap-4">
+                            {(isSuspended || !hasActiveAccess || (isInstallment && !isFullyPaid)) && (
+                                <div className="mt-5 border-t border-gray-100 pt-5 dark:border-zinc-800">
                                     {isSuspended ? (
-                                        <div className="text-center">
-                                            <span className="block font-semibold text-red-600">
+                                        <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+                                            <span className="block font-semibold text-red-700 dark:text-red-300">
                                                 {t('courses.detail.suspendedNotice')}
                                             </span>
-                                            <span className="block text-sm text-red-600/90">
+                                            <span className="mt-0.5 block text-xs text-red-600/90 dark:text-red-400">
                                                 {t('courses.detail.suspendedSub')}
                                             </span>
                                         </div>
                                     ) : !hasActiveAccess ? (
-                                        <div className="text-center">
-                                            <span className="block font-semibold text-red-600">
+                                        <div className="rounded-lg border border-red-200 bg-red-50 p-3.5 text-sm dark:border-red-900/50 dark:bg-red-950/30">
+                                            <span className="block font-semibold text-red-700 dark:text-red-300">
                                                 {t('courses.detail.paymentStatus', { status: courseInvoiceStatus.toUpperCase() })}
                                             </span>
-                                            <span className="block text-sm text-gray-600 dark:text-gray-400">
+                                            <span className="mt-0.5 block text-xs text-red-600/90 dark:text-red-400">
                                                 {courseInvoiceStatus === 'failed'
                                                     ? t('courses.detail.paymentFailedSub')
                                                     : t('courses.detail.paymentPendingSub')}
@@ -408,56 +413,52 @@ export default function DetailMyCourse({
                                         </div>
                                     ) : null}
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </section>
                     <section className="mx-auto mb-12 w-full max-w-7xl px-4">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <div className="col-span-2 flex h-full flex-col rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+                            <div className="col-span-2 flex h-full flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 {renderCertificateSection()}
 
-                                <h1 className="text-lg font-semibold">{t('courses.detail.yourProgress')}</h1>
+                                <h2 className="text-base font-semibold text-gray-900 dark:text-white">{t('courses.detail.yourProgress')}</h2>
 
                                 <div className="mt-4 mb-6">
                                     <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('courses.detail.learningProgress')}</span>
-                                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{courseItem?.progress || 0}%</span>
+                                        <span className="text-sm text-gray-600 dark:text-gray-400">{t('courses.detail.learningProgress')}</span>
+                                        <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">{courseItem?.progress || 0}%</span>
                                     </div>
-                                    <div className="h-3 w-full rounded-full bg-gray-200 shadow-inner dark:bg-gray-700">
+                                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
                                         <div
-                                            className={`relative h-3 rounded-full transition-all duration-500 ease-out ${
+                                            className={`h-full rounded-full transition-all duration-500 ease-out ${
                                                 (courseItem?.progress || 0) === 100
-                                                    ? 'bg-gradient-to-r from-green-400 via-green-500 to-green-600 shadow-lg'
-                                                    : 'bg-gradient-to-r from-blue-400 via-blue-500 to-blue-600'
+                                                    ? 'bg-emerald-600'
+                                                    : 'bg-primary'
                                             }`}
                                             style={{ width: `${courseItem?.progress || 0}%` }}
-                                        >
-                                            {(courseItem?.progress || 0) > 10 && (
-                                                <div className="absolute inset-0 animate-pulse rounded-full bg-white/20"></div>
-                                            )}
-                                        </div>
+                                        />
                                     </div>
                                 </div>
 
-                                <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+                                <div className="mb-6 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-zinc-800 dark:bg-zinc-800/50">
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('courses.detail.completionStatus')}</span>
                                         <div className="flex items-center gap-2">
                                             {courseItem?.completed_at ? (
                                                 <>
-                                                    <CheckCircle className="h-5 w-5 text-green-500" />
-                                                    <span className="text-sm font-semibold text-green-700 dark:text-green-400">{t('courses.detail.completed')}</span>
+                                                    <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                                                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{t('courses.detail.completed')}</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <div className="h-5 w-5 rounded-full border-2 border-gray-300 dark:border-gray-600"></div>
-                                                    <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">{t('courses.detail.inProgress')}</span>
+                                                    <Clock className="h-4 w-4 text-gray-400" />
+                                                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{t('courses.detail.inProgress')}</span>
                                                 </>
                                             )}
                                         </div>
                                     </div>
                                     {courseItem?.completed_at && (
-                                        <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                                        <div className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                                             {t('courses.detail.completedAt', {
                                                 date: new Date(courseItem.completed_at).toLocaleDateString(dateLocale, {
                                                     day: 'numeric',
@@ -471,15 +472,19 @@ export default function DetailMyCourse({
                                     )}
                                 </div>
 
-                                <h1 className="text-lg font-semibold">{t('courses.detail.keyPoints')}</h1>
-                                <ul className="mt-4 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                                    {keyPointList.map((keyPoint, idx) => (
-                                        <li key={idx} className="flex items-center gap-2">
-                                            <BadgeCheck size={18} className="mt-1 min-w-6 text-green-600" />
-                                            <p>{keyPoint}</p>
-                                        </li>
-                                    ))}
-                                </ul>
+                                {keyPointList.length > 0 && (
+                                    <div className="border-t border-gray-100 pt-5 dark:border-zinc-800">
+                                        <h2 className="text-base font-semibold text-gray-900 dark:text-white">{t('courses.detail.keyPoints')}</h2>
+                                        <ul className="mt-3 space-y-2.5 text-sm text-gray-600 dark:text-gray-400">
+                                            {keyPointList.map((keyPoint, idx) => (
+                                                <li key={idx} className="flex items-start gap-2.5 rounded-lg border border-gray-100 bg-gray-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-800/50">
+                                                    <BadgeCheck size={18} className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                                    <span className="text-gray-700 dark:text-gray-300">{keyPoint}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-span-1 space-y-4">
@@ -496,17 +501,19 @@ export default function DetailMyCourse({
                                         installmentTerms={terms}
                                     />
                                 )}
-                                <div className="flex h-full flex-col rounded-xl bg-white p-6 shadow dark:bg-zinc-800">
-                                    <h2 className="mb-4 text-center font-semibold">{courseData.title}</h2>
+                                <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                                     <img
                                         src={courseData.thumbnail ? `/storage/${courseData.thumbnail}` : '/assets/images/placeholder.png'}
                                         alt={courseData.title}
-                                        className="aspect-video rounded-xl object-cover shadow-lg"
+                                        className="aspect-video w-full rounded-lg border border-gray-200 object-cover dark:border-zinc-700"
                                     />
-                                    <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">{courseData.short_description}</p>
+                                    <h2 className="mt-4 font-semibold text-gray-900 dark:text-white">{courseData.title}</h2>
+                                    {courseData.short_description && (
+                                        <p className="mt-1.5 text-sm text-gray-600 dark:text-gray-400">{courseData.short_description}</p>
+                                    )}
 
                                     <Button
-                                        className="mt-2 w-full"
+                                        className="mt-4 w-full"
                                         onClick={() => router.get(route('learn.course.detail', { course: courseData.slug }))}
                                         disabled={!hasActiveAccess}
                                     >

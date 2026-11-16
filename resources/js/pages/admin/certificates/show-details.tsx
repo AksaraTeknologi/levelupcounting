@@ -58,7 +58,18 @@ export default function CertificateDetail({ certificate }: { certificate: Certif
                         <TableCell className="font-medium">Deskripsi</TableCell>
                         <TableCell>
                             {certificate.description ? (
-                                <div className="prose prose-sm max-w-none">{certificate.description}</div>
+                                <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                                    {certificate.description.split(/(\*\*[\s\S]+?\*\*|<(?:b|strong)>[\s\S]+?<\/(?:b|strong)>)/gi).map((part, idx) => {
+                                        if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
+                                            return <strong key={idx}>{part.slice(2, -2)}</strong>;
+                                        }
+                                        const tagMatch = part.match(/^<(?:b|strong)>([\s\S]+?)<\/(?:b|strong)>$/i);
+                                        if (tagMatch) {
+                                            return <strong key={idx}>{tagMatch[1]}</strong>;
+                                        }
+                                        return part;
+                                    })}
+                                </div>
                             ) : (
                                 <span className="text-muted-foreground">-</span>
                             )}

@@ -12,7 +12,7 @@ interface Webinar {
 }
 
 export default function HeroSection({ webinar }: { webinar: Webinar }) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
 
     const durationHours = Math.ceil(
         (new Date(webinar.end_time).getTime() - new Date(webinar.start_time).getTime()) / (1000 * 60 * 60)

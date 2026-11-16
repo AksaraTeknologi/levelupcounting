@@ -19,6 +19,9 @@ interface WebinarItem {
 interface CertificationProgramItem {
     certification_program: { title: string; slug: string; thumbnail: string; group_url?: string | null };
 }
+interface BundleEnrollmentItem {
+    bundle?: { title: string; slug: string; thumbnail?: string | null };
+}
 
 interface Invoice {
     id: string;
@@ -27,6 +30,7 @@ interface Invoice {
     bootcamp_items?: BootcampItem[];
     webinar_items?: WebinarItem[];
     certification_program_items?: CertificationProgramItem[];
+    bundle_enrollments?: BundleEnrollmentItem[];
 }
 
 interface InvoiceProps {
@@ -39,6 +43,7 @@ export default function CheckoutSuccess({ invoice }: InvoiceProps) {
     const bootcampItems = invoice.bootcamp_items ?? [];
     const webinarItems = invoice.webinar_items ?? [];
     const certificationProgramItems = invoice.certification_program_items ?? [];
+    const bundleEnrollments = invoice.bundle_enrollments ?? [];
 
     let title = '';
     let subtitle = '';
@@ -75,6 +80,14 @@ export default function CheckoutSuccess({ invoice }: InvoiceProps) {
         label = t('checkoutSuccess.accessCertification');
         thumbnail = certificationProgramItems[0].certification_program.thumbnail;
         icon = <Home className="h-6 w-6" />;
+    } else if (bundleEnrollments.length > 0 && bundleEnrollments[0].bundle) {
+        const bundle = bundleEnrollments[0].bundle;
+        title = bundle.title;
+        subtitle = 'Paket Bundle';
+        link = '/profile/my-courses';
+        label = 'Akses Kelas Bundle';
+        thumbnail = bundle.thumbnail || '';
+        icon = <Sparkles className="h-6 w-6" />;
     } else {
         title = t('checkoutSuccess.purchaseSuccessful');
         subtitle = t('checkoutSuccess.thankYou');

@@ -36,7 +36,7 @@ interface WebinarProps {
 }
 
 export default function WebinarSection({ categories, webinars, myWebinarIds }: WebinarProps) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [search, setSearch] = useState('');
     const [visibleCount, setVisibleCount] = useState(6);

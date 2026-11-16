@@ -74,7 +74,7 @@ interface DetailProps {
 }
 
 export default function Detail({ program, relatedPrograms, myProgramIds, scholarshipApplication, approvedScholarshipProgramIds = [] }: DetailProps) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const isEnrolled = myProgramIds.includes(program.id);
 
     return (

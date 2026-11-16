@@ -17,6 +17,13 @@ export default defineConfig({
     esbuild: {
         jsx: 'automatic',
     },
+    server: {
+        host: 'localhost',
+        cors: true,
+        hmr: {
+            host: 'localhost',
+        },
+    },
     resolve: {
         alias: {
             'ziggy-js': resolve(__dirname, 'vendor/tightenco/ziggy'),

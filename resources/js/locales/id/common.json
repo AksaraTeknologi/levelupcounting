@@ -20,6 +20,9 @@
     "checkCertificate": "Cek Sertifikat",
     "checkCertificateDesc": "Lihat sertifikat Anda dengan email dan nomor WA",
     "articles": "Artikel",
+    "articlesDesc": "Baca artikel, tips, dan wawasan terbaru seputar akuntansi & perpajakan",
+    "information": "Informasi",
+    "informationAndTools": "Informasi & Layanan",
     "login": "Masuk",
     "register": "Daftar",
     "about": "Tentang Kami",
@@ -167,8 +170,60 @@
       "sessionExpired": "Sesi Anda telah kedaluwarsa. Silakan muat ulang halaman.",
       "errorProcessTerm": "Terjadi kesalahan saat memproses pembayaran termin.",
       "mustAgreeTerms": "Silakan setujui syarat dan ketentuan terlebih dahulu.",
+      "acceptTerms": "Silakan setujui syarat dan ketentuan terlebih dahulu.",
+      "selectPaymentMethod": "Silakan pilih metode pembayaran terlebih dahulu.",
       "failCreateInvoice": "Gagal membuat tagihan cicilan",
+      "failCreateBill": "Gagal membuat tagihan cicilan",
       "errorProcessInstallment": "Terjadi kesalahan saat memproses pembayaran cicilan."
+    },
+    "fullyPaid": {
+      "title": "Cicilan Lunas",
+      "desc": "Cicilan Anda untuk program ini sudah lunas! Akses materi sudah aktif sepenuhnya.",
+      "historyButton": "Lihat Riwayat Cicilan"
+    },
+    "active": {
+      "title": "Cicilan Aktif",
+      "invoiceCode": "Invoice:",
+      "termsPaid": "Termin Dibayar",
+      "nextBill": "Tagihan Berikutnya:",
+      "termNumber": "Termin ke-{{number}}",
+      "nominal": "Nominal:",
+      "dueDate": "Jatuh Tempo:",
+      "overdue": "Terlewat",
+      "remainingBill": "Sisa Total Tagihan:",
+      "overdueAlertTitle": "Cicilan Melewati Jatuh Tempo",
+      "overdueAlertDesc": "Batas waktu pembayaran telah terlewati. Pembayaran mandiri ditutup. Silakan hubungi admin untuk penyelesaian cicilan.",
+      "processing": "Memproses...",
+      "payNow": "Bayar Termin ke-{{number}}",
+      "contactAdmin": "Hubungi Admin via WhatsApp",
+      "allHistory": "Semua Riwayat"
+    },
+    "register": {
+      "closedTitle": "Cicilan Ditutup",
+      "closedDesc": "Opsi pembayaran cicilan untuk program ini telah ditutup karena batas waktu pembayaran telah terlewati.",
+      "programCicilan": "Program Cicilan Tersedia",
+      "termsCount": "{{count}}x Termin Cicilan",
+      "scheduleTitle": "Jadwal Pembayaran Cicilan",
+      "termsLabel": "Termin",
+      "dpLabel": "Termin 1 (DP)",
+      "termNumberLabel": "Termin ke-{{number}}",
+      "includingTripayFee": "Termasuk Biaya Transaksi",
+      "termsNoteFee": "Biaya transaksi disesuaikan dengan metode pembayaran Tripay yang dipilih.",
+      "termsNoteActive": "Akses materi/program langsung aktif segera setelah DP dibayar.",
+      "termsNotePromo": "Voucher promo dan poin reward tidak dapat digunakan pada pembayaran cicilan.",
+      "termsNoteSuspend": "Akses akan ditangguhkan jika cicilan melewati tanggal jatuh tempo.",
+      "agreeToTerms": "Saya menyetujui",
+      "termsLink": "syarat dan ketentuan cicilan",
+      "processing": "Memproses...",
+      "payDpButton": "Bayar DP ({{amount}}) & Aktifkan Program"
     }
+  },
+  "paymentChannelSelector": {
+    "title": "Pilih Metode Pembayaran",
+    "autoVerification": "Verifikasi Otomatis",
+    "freeOfCharge": "Bebas Biaya",
+    "calculatingFee": "Menghitung biaya...",
+    "otherMethods": "Metode Lainnya",
+    "feeUnavailable": "Biaya pembayaran belum dapat diperoleh. Silakan coba kembali atau pilih metode pembayaran lain."
   }
 }

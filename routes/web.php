@@ -167,6 +167,9 @@ Route::post('/certification-programs/{program:slug}/scholarship-store', [UserCer
 Route::get('/certification-programs/{program:slug}/scholarship-success', [UserCertificationProgramController::class, 'scholarshipSuccess']);
 
 Route::get('/payment/va-banks', [InvoiceController::class, 'getVaBanks'])->name('payment.va-banks');
+Route::get('/payment/channels', [InvoiceController::class, 'paymentChannels'])->name('payment.channels');
+Route::match(['get', 'post'], '/payment/calculate-fee', [InvoiceController::class, 'calculateFee'])->name('payment.calculate-fee');
+Route::get('/tripay/return', [InvoiceController::class, 'tripayReturn'])->name('tripay.return');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/course/checkout/success', [UserCourseController::class, 'showCheckoutSuccess'])->name('course.checkout.success');

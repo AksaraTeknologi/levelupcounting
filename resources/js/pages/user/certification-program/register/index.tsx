@@ -1,5 +1,5 @@
 import InstallmentOptions, { ActiveInstallmentData, InstallmentTermOption } from '@/components/installment-options';
-import PaymentMethodSelector from '@/components/payment-method-selector';
+import PaymentChannelSelector, { CalculatedFeeData } from '@/components/payment-channel-selector';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -156,7 +156,7 @@ export default function Register({
     installmentTerms = [],
     activeInstallment: initialActiveInstallment = null,
 }: RegisterProps) {
-    const { t, i18n } = useTranslation();
+    const { t, i18n } = useTranslation('user');
     const currentLocale = i18n.language === 'en' ? enUS : idLocale;
     const { auth } = usePage<SharedData>().props;
     const user = auth.user as
@@ -200,7 +200,9 @@ export default function Register({
     const [isDocumentDialogOpen, setIsDocumentDialogOpen] = useState(false);
     const [documentAttachment, setDocumentAttachment] = useState<File | null>(null);
     const [termsAccepted, setTermsAccepted] = useState(false);
-    const [selectedChannel, setSelectedChannel] = useState<string>('qris');
+    const [selectedChannel, setSelectedChannel] = useState<string>('');
+    const [calculatedFee, setCalculatedFee] = useState<CalculatedFeeData | null>(null);
+    const [feeError, setFeeError] = useState<string | null>(null);
     const [codeType, setCodeType] = useState<'voucher' | 'referral'>('voucher');
     const [promoCode, setPromoCode] = useState('');
 
@@ -234,6 +236,8 @@ export default function Register({
     const isApprovedScholarship = scholarshipApplication?.status === 'approved' || guestScholarshipStatus === 'approved';
     const isScholarshipNotApproved = program.type === 'scholarship' && !isApprovedScholarship;
     const displayPrice = isScholarshipNotApproved ? 0 : (isScholarship && program.scholarship_price ? program.scholarship_price : program.price);
+    const finalProgramPrice = Math.max(0, displayPrice - (discountData?.valid ? discountData.discount_amount : 0));
+    const adminFee = displayPrice === 0 || finalProgramPrice === 0 ? 0 : (calculatedFee ? calculatedFee.fee_customer : 0);
     const deadline = program.registration_deadline ? new Date(program.registration_deadline) : null;
     const getDate = (s: Schedule) => s.schedule_date || s.start_date || '';
     const requiresDocumentUpload = program.type === 'regular' && !!program.document_required && !isScholarship;
@@ -553,15 +557,16 @@ export default function Register({
                 program.strikethrough_price && program.strikethrough_price > 0 ? program.strikethrough_price - program.price : 0;
             const promoDiscountAmount = discountData?.valid ? discountData.discount_amount : 0;
             const activeFinalPrice = displayPrice - promoDiscountAmount;
-            const adminFee = displayPrice === 0 ? 0 : 5000;
+            const activeAdminFee = displayPrice === 0 || activeFinalPrice === 0 ? 0 : (calculatedFee ? calculatedFee.fee_customer : 0);
             const invoiceData: Record<string, string | number> = {
                 type: 'certification_program',
                 id: program.id,
                 discount_amount: originalDiscountAmount + promoDiscountAmount,
                 nett_amount: activeFinalPrice,
-                transaction_fee: adminFee,
-                total_amount: activeFinalPrice + adminFee,
+                transaction_fee: activeAdminFee,
+                total_amount: activeFinalPrice + activeAdminFee,
                 payment_channel: selectedChannel,
+                payment_method: selectedChannel,
                 isScholarship: isScholarship ? 1 : 0,
                 is_scholarship: isScholarship ? 1 : 0,
             };
@@ -598,13 +603,18 @@ export default function Register({
                 throw error;
             }
         },
-        [displayPrice, discountData, program.id, program.price, program.strikethrough_price, isScholarship, codeType, promoCode, referralData, t],
+        [displayPrice, discountData, program.id, program.price, program.strikethrough_price, isScholarship, codeType, promoCode, referralData, selectedChannel, calculatedFee, t],
     );
 
     const handleCheckout = useCallback(async () => {
         if (activeInstallment && !activeInstallment.is_fully_paid) {
             toast.error(t('certificationProgram.register.activeInstallmentNotice'));
             setPaymentTab('installment');
+            return;
+        }
+
+        if (displayPrice > 0 && !selectedChannel) {
+            toast.error(t('certificationProgram.register.mustSelectPaymentChannel', 'Silakan pilih metode/channel pembayaran terlebih dahulu!'));
             return;
         }
 
@@ -1375,12 +1385,18 @@ export default function Register({
 
                                         <div className="space-y-2 pt-2">
                                             {pendingInvoice.invoice_url && (
-                                                <Button asChild className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold" size="lg">
-                                                    <a href={pendingInvoice.invoice_url}>
+                                                <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold" size="lg">
+                                                    <a href={pendingInvoice.invoice_url} target="_blank" rel="noopener noreferrer">
                                                         {t('certificationProgram.register.btnContinuePayment')}
                                                     </a>
                                                 </Button>
                                             )}
+
+                                            <Button asChild variant="outline" className="w-full border-indigo-400 text-indigo-700 hover:bg-indigo-50 font-semibold" size="lg">
+                                                <a href="https://tripay.co.id/simulator" target="_blank" rel="noopener noreferrer">
+                                                    Bayar via Simulator Tripay
+                                                </a>
+                                            </Button>
 
                                             <div className="flex gap-2">
                                                 <Button onClick={() => window.location.reload()} variant="outline" className="flex-1" size="lg">
@@ -1576,10 +1592,15 @@ export default function Register({
                                                     </div>
                                                 </div>
 
-                                                <PaymentMethodSelector
+                                                <PaymentChannelSelector
                                                     selectedChannel={selectedChannel}
-                                                    onChannelChange={setSelectedChannel}
+                                                    onSelectChannel={setSelectedChannel}
+                                                    amount={finalProgramPrice}
                                                     className="mb-6"
+                                                    onFeeCalculated={(feeData, err) => {
+                                                        setCalculatedFee(feeData);
+                                                        setFeeError(err);
+                                                    }}
                                                 />
 
                                                 {/* Price Breakdown */}
@@ -1620,7 +1641,15 @@ export default function Register({
                                                     {displayPrice > 0 && (
                                                         <div className="flex items-center justify-between text-sm">
                                                             <span className="text-gray-600 dark:text-gray-400">{t('certificationProgram.register.adminFee')}</span>
-                                                            <span className="font-semibold">{formatRupiah(5000)}</span>
+                                                            <span className="font-semibold">
+                                                                {feeError ? (
+                                                                    <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                                ) : adminFee === 0 ? (
+                                                                    'Bebas Biaya'
+                                                                ) : (
+                                                                    formatRupiah(adminFee)
+                                                                )}
+                                                            </span>
                                                         </div>
                                                     )}
 
@@ -1629,7 +1658,7 @@ export default function Register({
                                                     <div className="flex items-center justify-between">
                                                         <span className="font-bold">{t('certificationProgram.register.totalPayment')}</span>
                                                         <span className="text-2xl font-bold text-orange-600">
-                                                            {displayPrice === 0 ? t('certificationProgram.register.free') : formatRupiah(displayPrice - (discountData?.discount_amount || 0) + 5000)}
+                                                            {displayPrice === 0 ? t('certificationProgram.register.free') : formatRupiah(finalProgramPrice + adminFee)}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1674,9 +1703,10 @@ export default function Register({
                                                                 !isScholarship &&
                                                                 requiresDocumentUpload) ||
                                                             scholarshipNotApproved ||
-                                                            !termsAccepted
+                                                            !termsAccepted ||
+                                                            (displayPrice > 0 && (!selectedChannel || Boolean(feeError)))
                                                         }
-                                                        className="w-full"
+                                                        className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                         size="lg"
                                                     >
                                                         {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1830,10 +1860,15 @@ export default function Register({
                                             )}
 
                                             {displayPrice > 0 && (
-                                                <PaymentMethodSelector
+                                                <PaymentChannelSelector
                                                     selectedChannel={selectedChannel}
-                                                    onChannelChange={setSelectedChannel}
+                                                    onSelectChannel={setSelectedChannel}
+                                                    amount={finalProgramPrice}
                                                     className="mb-6"
+                                                    onFeeCalculated={(feeData, err) => {
+                                                        setCalculatedFee(feeData);
+                                                        setFeeError(err);
+                                                    }}
                                                 />
                                             )}
 
@@ -1875,7 +1910,15 @@ export default function Register({
                                                 {displayPrice > 0 && (
                                                     <div className="flex items-center justify-between text-sm">
                                                         <span className="text-gray-600 dark:text-gray-400">{t('certificationProgram.register.adminFee')}</span>
-                                                        <span className="font-semibold">{formatRupiah(5000)}</span>
+                                                        <span className="font-semibold">
+                                                            {feeError ? (
+                                                                <span className="text-red-500 text-xs">Gagal memuat</span>
+                                                            ) : adminFee === 0 ? (
+                                                                'Bebas Biaya'
+                                                            ) : (
+                                                                formatRupiah(adminFee)
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 )}
 
@@ -1884,7 +1927,7 @@ export default function Register({
                                                 <div className="flex items-center justify-between">
                                                     <span className="font-bold">{t('certificationProgram.register.totalPayment')}</span>
                                                     <span className="text-2xl font-bold text-orange-600">
-                                                        {displayPrice === 0 ? t('certificationProgram.register.free') : formatRupiah(displayPrice - (discountData?.discount_amount || 0) + 5000)}
+                                                        {displayPrice === 0 ? t('certificationProgram.register.free') : formatRupiah(finalProgramPrice + adminFee)}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1931,9 +1974,10 @@ export default function Register({
                                                             !isScholarship &&
                                                             requiresDocumentUpload) ||
                                                         scholarshipNotApproved ||
-                                                        (displayPrice > 0 && !termsAccepted)
+                                                        (displayPrice > 0 && !termsAccepted) ||
+                                                        (displayPrice > 0 && (!selectedChannel || Boolean(feeError)))
                                                     }
-                                                    className="w-full"
+                                                    className="w-full disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                                                     size="lg"
                                                 >
                                                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

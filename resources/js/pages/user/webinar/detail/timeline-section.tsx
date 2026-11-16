@@ -14,7 +14,7 @@ function parseCurriculum(curriculum?: string | null): string[] {
 }
 
 export default function TimelineSection({ bootcamp }: { bootcamp: Bootcamp }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
     const curriculumList = parseCurriculum(bootcamp.curriculum);
 
     return (

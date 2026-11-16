@@ -7,7 +7,7 @@ interface Webinar {
 }
 
 export default function ToolsSection({ webinar }: { webinar: Webinar }) {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
 
     return (
         <section className="relative mx-auto w-full max-w-7xl px-4 pt-6 pb-12" id="tools">

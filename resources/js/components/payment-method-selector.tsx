@@ -1,47 +1,199 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { QrCode, Building2, Check, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
+import { Building2, Check, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import axios from 'axios';
 import BankLogo from '@/components/bank-logo';
+import { rupiahFormatter } from '@/lib/utils';
+
+export interface TripayFeeObject {
+    flat?: number;
+    percent?: number | string;
+}
 
 export interface SupportedBank {
     code?: string;
     name?: string;
     bank_code: string;
     bank_name: string;
+    group?: string;
+    type?: string;
+    fee_merchant?: TripayFeeObject;
+    fee_customer?: TripayFeeObject;
+    total_fee?: TripayFeeObject;
+    minimum_fee?: number | null;
+    maximum_fee?: number | null;
+    minimum_amount?: number | null;
+    maximum_amount?: number | null;
+    icon_url?: string | null;
+    active?: boolean;
     va_type?: string[];
+}
+
+export function calculateChannelFee(
+    channel: SupportedBank | null | undefined,
+    nettAmount: number,
+): number {
+    if (!channel || nettAmount <= 0) {
+        return 0;
+    }
+
+    const feeCustomer = channel.fee_customer || channel.total_fee;
+    if (!feeCustomer) {
+        return 0;
+    }
+
+    const flatFee = Number(feeCustomer.flat ?? 0);
+    const percentValue = Number(feeCustomer.percent ?? 0);
+    const percentFee = Math.round(nettAmount * (percentValue / 100));
+
+    let calculatedFee = Math.round(flatFee + percentFee);
+
+    const minFee = channel.minimum_fee !== null && channel.minimum_fee !== undefined ? Number(channel.minimum_fee) : 0;
+    const maxFee = channel.maximum_fee !== null && channel.maximum_fee !== undefined ? Number(channel.maximum_fee) : 0;
+
+    if (minFee > 0 && calculatedFee < minFee) {
+        calculatedFee = minFee;
+    }
+    if (maxFee > 0 && calculatedFee > maxFee) {
+        calculatedFee = maxFee;
+    }
+
+    return Math.max(0, calculatedFee);
+}
+
+export function formatChannelFeeDescription(
+    channel: SupportedBank | null | undefined,
+    nettAmount?: number,
+): string {
+    if (!channel) return '';
+    if (typeof nettAmount === 'number' && nettAmount > 0) {
+        const fee = calculateChannelFee(channel, nettAmount);
+        return fee > 0 ? `+ ${rupiahFormatter.format(fee)}` : 'Gratis Biaya';
+    }
+    const feeCustomer = channel.fee_customer || channel.total_fee;
+    if (!feeCustomer) return '';
+    const flat = Number(feeCustomer.flat ?? 0);
+    const percent = Number(feeCustomer.percent ?? 0);
+    if (flat > 0 && percent > 0) {
+        return `${rupiahFormatter.format(flat)} + ${percent}%`;
+    }
+    if (flat > 0) {
+        return rupiahFormatter.format(flat);
+    }
+    if (percent > 0) {
+        return `${percent}%`;
+    }
+    return 'Gratis Biaya';
 }
 
 interface PaymentMethodSelectorProps {
     selectedChannel: string;
     onChannelChange: (channel: string) => void;
+    onChannelSelect?: (channel: SupportedBank | null) => void;
+    amount?: number;
     className?: string;
 }
 
-const DEFAULT_BANKS: SupportedBank[] = [
-    { bank_code: 'BMRI', bank_name: 'Bank Mandiri', va_type: ['DYNAMIC', 'STATIC'] },
-    { bank_code: 'BNIA', bank_name: 'Bank CIMB Niaga', va_type: ['DYNAMIC', 'STATIC'] },
-    { bank_code: 'BBBA', bank_name: 'Bank Permata', va_type: ['DYNAMIC', 'STATIC'] },
-    { bank_code: 'BRIN', bank_name: 'Bank Rakyat Indonesia (BRI)', va_type: ['DYNAMIC', 'STATIC'] },
-    { bank_code: 'BSYI', bank_name: 'Bank Syariah Indonesia (BSI)', va_type: ['DYNAMIC', 'STATIC'] },
+export const DEFAULT_BANKS: SupportedBank[] = [
+    {
+        code: 'QRIS',
+        name: 'QRIS (Customizable)',
+        bank_code: 'QRIS',
+        bank_name: 'QRIS (Customizable)',
+        group: 'E-Wallet',
+        fee_customer: { flat: 750, percent: 0.7 },
+    },
+    {
+        code: 'MANDIRIVA',
+        name: 'Mandiri Virtual Account',
+        bank_code: 'MANDIRIVA',
+        bank_name: 'Mandiri Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
+    {
+        code: 'BRIVA',
+        name: 'BRI Virtual Account',
+        bank_code: 'BRIVA',
+        bank_name: 'BRI Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
+    {
+        code: 'BNIVA',
+        name: 'BNI Virtual Account',
+        bank_code: 'BNIVA',
+        bank_name: 'BNI Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
+    {
+        code: 'BCAVA',
+        name: 'BCA Virtual Account',
+        bank_code: 'BCAVA',
+        bank_name: 'BCA Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 5500, percent: 0 },
+    },
+    {
+        code: 'BSIVA',
+        name: 'BSI Virtual Account',
+        bank_code: 'BSIVA',
+        bank_name: 'BSI Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
+    {
+        code: 'CIMBVA',
+        name: 'CIMB Niaga Virtual Account',
+        bank_code: 'CIMBVA',
+        bank_name: 'CIMB Niaga Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
+    {
+        code: 'PERMATAVA',
+        name: 'Permata Virtual Account',
+        bank_code: 'PERMATAVA',
+        bank_name: 'Permata Virtual Account',
+        group: 'Virtual Account',
+        fee_customer: { flat: 4250, percent: 0 },
+    },
 ];
 
 export default function PaymentMethodSelector({
     selectedChannel,
     onChannelChange,
+    onChannelSelect,
+    amount,
     className = '',
 }: PaymentMethodSelectorProps) {
-    const isQris = !selectedChannel || selectedChannel.toLowerCase() === 'qris';
+    const normalizedSelected = (selectedChannel || 'QRIS').toUpperCase().trim();
+    const isQris = !selectedChannel || normalizedSelected.includes('QRIS');
     const isVa = !isQris;
 
     const [banks, setBanks] = useState<SupportedBank[]>(DEFAULT_BANKS);
+
+    const qrisChannelObj = useMemo(() => {
+        return (
+            banks.find((b) => (b.code || b.bank_code || '').toUpperCase() === normalizedSelected && normalizedSelected.includes('QRIS')) ||
+            banks.find((b) => (b.code || b.bank_code || '').toUpperCase().includes('QRIS')) ||
+            DEFAULT_BANKS[0]
+        );
+    }, [banks, normalizedSelected]);
+
+    const vaBanks = useMemo(() => {
+        const filtered = banks.filter((b) => !(b.code || b.bank_code || '').toUpperCase().includes('QRIS'));
+        return filtered.length > 0 ? filtered : DEFAULT_BANKS.slice(1);
+    }, [banks]);
+
     const [selectedBank, setSelectedBank] = useState<string>(
-        isVa && selectedChannel ? selectedChannel : DEFAULT_BANKS[0].bank_code
+        isVa && selectedChannel ? selectedChannel : vaBanks[0]?.code || vaBanks[0]?.bank_code || 'MANDIRIVA',
     );
     const [showBankList, setShowBankList] = useState<boolean>(true);
 
-    // Fetch daftar bank aktual dari API
+    // Fetch daftar channel pembayaran aktual dari API Tripay (/payment/va-banks)
     useEffect(() => {
         let isMounted = true;
         axios
@@ -62,13 +214,34 @@ export default function PaymentMethodSelector({
         };
     }, []);
 
+    // Sinkronkan objek channel terpilih ke parent
+    useEffect(() => {
+        if (!onChannelSelect) return;
+        if (isQris) {
+            onChannelSelect(qrisChannelObj);
+        } else {
+            const found =
+                vaBanks.find((b) => (b.code || b.bank_code || '').toUpperCase() === normalizedSelected) ||
+                vaBanks[0] ||
+                null;
+            onChannelSelect(found);
+        }
+    }, [isQris, normalizedSelected, qrisChannelObj, vaBanks, onChannelSelect]);
+
     const handleSelectMethod = (method: 'qris' | 'va') => {
         if (method === 'qris') {
-            onChannelChange('qris');
+            const qrisCode = qrisChannelObj?.code || qrisChannelObj?.bank_code || 'QRIS';
+            onChannelChange(qrisCode);
+            onChannelSelect?.(qrisChannelObj);
         } else {
-            const bankToSet = selectedBank || banks[0]?.bank_code || 'BMRI';
+            const validExisting = vaBanks.find(
+                (b) => (b.code || b.bank_code || '').toUpperCase() === selectedBank.toUpperCase(),
+            );
+            const targetBank = validExisting || vaBanks[0];
+            const bankToSet = targetBank?.code || targetBank?.bank_code || 'MANDIRIVA';
             setSelectedBank(bankToSet);
             onChannelChange(bankToSet);
+            onChannelSelect?.(targetBank || null);
             setShowBankList(true);
         }
     };
@@ -76,10 +249,15 @@ export default function PaymentMethodSelector({
     const handleSelectBank = (bankCode: string) => {
         setSelectedBank(bankCode);
         onChannelChange(bankCode);
+        const found =
+            vaBanks.find((b) => (b.code || b.bank_code || '').toUpperCase() === bankCode.toUpperCase()) || null;
+        onChannelSelect?.(found);
     };
 
     const currentBankObj =
-        banks.find((b) => (b.bank_code || b.code || '').toUpperCase() === selectedBank.toUpperCase()) || banks[0];
+        vaBanks.find((b) => (b.bank_code || b.code || '').toUpperCase() === selectedBank.toUpperCase()) || vaBanks[0];
+
+    const qrisFeeLabel = formatChannelFeeDescription(qrisChannelObj, amount);
 
     return (
         <div className={`space-y-3.5 ${className}`}>
@@ -105,16 +283,28 @@ export default function PaymentMethodSelector({
                     }`}
                 >
                     <div className="flex min-w-0 items-center gap-3">
-                        <BankLogo bankCode="QRIS" size="md" className="shrink-0" />
+                        <BankLogo
+                            bankCode={qrisChannelObj?.code || qrisChannelObj?.bank_code || 'QRIS'}
+                            iconUrl={qrisChannelObj?.icon_url}
+                            size="md"
+                            className="shrink-0"
+                        />
                         <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-sm text-foreground">QRIS</span>
+                                <span className="font-bold text-sm text-foreground">
+                                    {qrisChannelObj?.name || 'QRIS'}
+                                </span>
                                 <Badge
                                     variant="outline"
                                     className="border-emerald-300 bg-emerald-50 text-[10px] text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300 py-0 px-1.5 font-bold"
                                 >
                                     Instan
                                 </Badge>
+                                {qrisFeeLabel && (
+                                    <span className="text-[10px] font-semibold text-muted-foreground">
+                                        ({qrisFeeLabel})
+                                    </span>
+                                )}
                             </div>
                             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
                                 GoPay, BCA, Mandiri, OVO, Dana, ShopeePay
@@ -146,7 +336,12 @@ export default function PaymentMethodSelector({
                 >
                     <div className="flex min-w-0 items-center gap-3">
                         {isVa && currentBankObj ? (
-                            <BankLogo bankCode={currentBankObj.bank_code || currentBankObj.code || 'BMRI'} size="md" className="shrink-0" />
+                            <BankLogo
+                                bankCode={currentBankObj.bank_code || currentBankObj.code || 'MANDIRIVA'}
+                                iconUrl={currentBankObj.icon_url}
+                                size="md"
+                                className="shrink-0"
+                            />
                         ) : (
                             <div className="flex h-7 w-12 items-center justify-center rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shrink-0">
                                 <Building2 className="h-4 w-4" />
@@ -154,7 +349,7 @@ export default function PaymentMethodSelector({
                         )}
                         <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="font-bold text-sm text-foreground">Virtual Account</span>
+                                <span className="font-bold text-sm text-foreground">Virtual Account / Channel Lain</span>
                                 <Badge
                                     variant="outline"
                                     className="border-blue-300 bg-blue-50 text-[10px] text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300 py-0 px-1.5 font-bold"
@@ -163,7 +358,9 @@ export default function PaymentMethodSelector({
                                 </Badge>
                             </div>
                             <p className="text-[11px] text-muted-foreground mt-0.5 truncate">
-                                {isVa && currentBankObj ? currentBankObj.bank_name || currentBankObj.name : 'Mandiri, CIMB Niaga, Permata, BRI, BSI'}
+                                {isVa && currentBankObj
+                                    ? `${currentBankObj.bank_name || currentBankObj.name} (${formatChannelFeeDescription(currentBankObj, amount)})`
+                                    : 'Mandiri, BRI, BNI, BCA, BSI, CIMB Niaga, Permata'}
                             </p>
                         </div>
                     </div>
@@ -186,7 +383,7 @@ export default function PaymentMethodSelector({
                     <div className="flex items-center justify-between pb-1 border-b border-border/50">
                         <div className="flex items-center gap-1.5">
                             <Building2 className="h-3.5 w-3.5 text-orange-600" />
-                            <span className="text-xs font-bold text-foreground">Pilih Bank Virtual Account</span>
+                            <span className="text-xs font-bold text-foreground">Pilih Channel Pembayaran</span>
                         </div>
                         <button
                             type="button"
@@ -196,17 +393,18 @@ export default function PaymentMethodSelector({
                             }}
                             className="inline-flex items-center gap-1 text-[11px] font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400"
                         >
-                            <span>{showBankList ? 'Tutup Pilihan' : 'Ganti Bank'}</span>
+                            <span>{showBankList ? 'Tutup Pilihan' : 'Ganti Channel'}</span>
                             {showBankList ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                         </button>
                     </div>
 
                     {showBankList && (
                         <div className="space-y-1.5 max-h-[260px] overflow-y-auto pr-0.5 scrollbar-thin">
-                            {banks.map((bank) => {
+                            {vaBanks.map((bank) => {
                                 const bankCode = bank.bank_code || bank.code || '';
                                 const bankName = bank.bank_name || bank.name || bankCode;
                                 const isBankSelected = selectedBank.toUpperCase() === bankCode.toUpperCase();
+                                const feeLabel = formatChannelFeeDescription(bank, amount);
 
                                 return (
                                     <div
@@ -221,10 +419,22 @@ export default function PaymentMethodSelector({
                                         }`}
                                     >
                                         <div className="flex min-w-0 items-center gap-2.5">
-                                            <BankLogo bankCode={bankCode} size="sm" className="shrink-0" />
+                                            <BankLogo
+                                                bankCode={bankCode}
+                                                iconUrl={bank.icon_url}
+                                                size="sm"
+                                                className="shrink-0"
+                                            />
                                             <div className="min-w-0">
                                                 <div className="text-xs font-semibold text-foreground truncate">{bankName}</div>
-                                                <div className="text-[10px] text-muted-foreground font-mono">Kode: {bankCode}</div>
+                                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                                                    <span className="font-mono">Kode: {bankCode}</span>
+                                                    {feeLabel && (
+                                                        <span className="font-semibold text-orange-600 dark:text-orange-400">
+                                                            • Biaya: {feeLabel}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
 

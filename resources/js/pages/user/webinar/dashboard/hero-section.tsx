@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 
 export default function HeroSection() {
-    const { t } = useTranslation();
+    const { t } = useTranslation('user');
 
     const stats = [
         { label: t('webinar.hero.totalWebinar'), value: '30+', icon: Video, color: 'text-primary', bg: 'bg-primary/10' },
