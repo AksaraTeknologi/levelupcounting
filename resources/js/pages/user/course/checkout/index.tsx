@@ -335,6 +335,12 @@ export default function CheckoutCourse({
     const handleFreeCheckout = (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (!isLoggedIn) {
+            toast.error(t('course.checkout.loginSubtitle', 'Silakan login terlebih dahulu untuk melanjutkan pendaftaran'));
+            window.location.href = route('login', { redirect: window.location.href });
+            return;
+        }
+
         if (!isProfileComplete) {
             alert(t('course.checkout.profileIncompletePhone', 'Profil Anda belum lengkap! Harap lengkapi nomor telepon terlebih dahulu.'));
             window.location.href = route('profile.edit');
@@ -363,6 +369,12 @@ export default function CheckoutCourse({
 
     const handleCheckout = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (!isLoggedIn) {
+            toast.error(t('course.checkout.loginSubtitle', 'Silakan login terlebih dahulu untuk melanjutkan pendaftaran'));
+            window.location.href = route('login', { redirect: window.location.href });
+            return;
+        }
 
         if (!isProfileComplete) {
             alert(t('course.checkout.profileIncompletePhone', 'Profil Anda belum lengkap! Harap lengkapi nomor telepon terlebih dahulu.'));
@@ -461,7 +473,8 @@ export default function CheckoutCourse({
     //     return channel?.icon_url || '';
     // };
 
-    const formatExpiryTime = (expiresAt: string): { time: string; status: 'expired' | 'urgent' | 'normal' } => {
+    const formatExpiryTime = (expiresAt?: string | null): { time: string; status: 'expired' | 'urgent' | 'normal' } => {
+        if (!expiresAt) return { time: 'Normal', status: 'normal' };
         const now = new Date();
         const expiry = new Date(expiresAt);
         const diff = expiry.getTime() - now.getTime();
@@ -486,88 +499,7 @@ export default function CheckoutCourse({
         });
     };
 
-    if (!isLoggedIn) {
-        const currentUrl = window.location.href;
-        const loginUrl = route('login', { redirect: currentUrl });
-
-        return (
-            <UserLayout>
-                <Head title={t('course.checkout.loginRequired', 'Login Diperlukan')} />
-
-                <section className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-purple-700 px-4 py-16">
-                    <div className="bg-grid-white/[0.05] absolute inset-0 bg-[size:20px_20px]" />
-                    <div className="absolute top-0 left-0 h-96 w-96 -translate-x-1/2 -translate-y-1/2 rounded-full bg-blue-400/30 blur-3xl" />
-                    <div className="absolute right-0 bottom-0 h-96 w-96 translate-x-1/2 translate-y-1/2 rounded-full bg-purple-400/30 blur-3xl" />
-
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="relative mx-auto max-w-4xl text-center">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ delay: 0.1 }}
-                            className="mb-6 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 backdrop-blur-sm"
-                        >
-                            <Lock className="h-4 w-4 text-white" />
-                            <span className="text-sm font-medium text-white">{t('course.checkout.loginRequired', 'Login Diperlukan')}</span>
-                        </motion.div>
-
-                        <motion.h1
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
-                            className="mb-4 text-3xl font-bold text-white sm:text-4xl lg:text-5xl"
-                        >
-                            {course.title}
-                        </motion.h1>
-
-                        <motion.p
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            className="text-lg text-blue-100"
-                        >
-                            {t('course.checkout.loginSubtitle', 'Silakan login terlebih dahulu untuk melanjutkan pendaftaran')}
-                        </motion.p>
-                    </motion.div>
-                </section>
-
-                <section className="mx-auto my-8 w-full max-w-2xl px-4">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                        <Card className="overflow-hidden border-2">
-                            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-8 dark:from-blue-950/20 dark:to-purple-950/20">
-                                <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg">
-                                    <User className="h-10 w-10 text-white" />
-                                </div>
-
-                                <h2 className="mb-3 text-center text-2xl font-bold">{t('course.checkout.loginToContinue', 'Login untuk Melanjutkan')}</h2>
-                                <p className="mb-6 text-center text-gray-600 dark:text-gray-400">
-                                    {t('course.checkout.loginDesc', 'Anda perlu login untuk mendaftar kelas ini.')}
-                                    {referralInfo.hasActive && ` ${t('course.checkout.referralPersistNotice', 'Kode referral Anda akan tetap tersimpan.')}`}
-                                </p>
-
-                                <div className="flex flex-col gap-3 sm:flex-row">
-                                    <Button
-                                        asChild
-                                        size="lg"
-                                        className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                                    >
-                                        <a href={loginUrl}>
-                                            <User className="mr-2 h-4 w-4" />
-                                            {t('course.checkout.loginNow', 'Login Sekarang')}
-                                        </a>
-                                    </Button>
-                                    <Button asChild variant="outline" size="lg" className="flex-1 border-2">
-                                        <Link href={route('register', referralInfo.code ? { ref: referralInfo.code } : {})}>{t('course.checkout.registerNewAccount', 'Buat Akun Baru')}</Link>
-                                    </Button>
-                                </div>
-                            </div>
-                        </Card>
-                    </motion.div>
-                </section>
-            </UserLayout>
-        );
-    }
-
-    if (!isProfileComplete) {
+    if (isLoggedIn && !isProfileComplete) {
         return (
             <UserLayout>
                 <Head title={t('course.checkout.incompleteProfileTitle', 'Lengkapi Profil')} />
@@ -1345,7 +1277,13 @@ export default function CheckoutCourse({
                                                         activeInstallment={activeInstallment}
                                                         termsAccepted={termsAccepted}
                                                         onTermsAcceptedChange={setTermsAccepted}
+                                                        requireAuthForGuest
                                                         onBeforePay={async () => {
+                                                            if (!isLoggedIn) {
+                                                                toast.error(t('course.checkout.loginSubtitle', 'Silakan login terlebih dahulu untuk melanjutkan pendaftaran'));
+                                                                window.location.href = route('login', { redirect: window.location.href });
+                                                                return false;
+                                                            }
                                                             if (!isProfileComplete) {
                                                                 toast.error(t('course.checkout.profileIncompletePhone'));
                                                                 setTimeout(() => {

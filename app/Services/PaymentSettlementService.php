@@ -390,9 +390,11 @@ class PaymentSettlementService
 
         if ($invoice->courseItems->count() > 0) {
             foreach ($invoice->courseItems as $item) {
-                $item->update([
-                    'completed_at' => Carbon::now('Asia/Jakarta')
-                ]);
+                if ((int) $item->progress >= 100 && !$item->completed_at) {
+                    $item->update([
+                        'completed_at' => Carbon::now('Asia/Jakarta')
+                    ]);
+                }
                 if ($includeCertificateParticipants) {
                     $this->addToCertificateParticipants('course', $item->course_id, $userId);
                 }
@@ -431,10 +433,6 @@ class PaymentSettlementService
 
         if ($invoice->bundleEnrollments->count() > 0) {
             foreach ($invoice->bundleEnrollments as $enrollment) {
-                $enrollment->update([
-                    'completed_at' => Carbon::now('Asia/Jakarta')
-                ]);
-
                 if (method_exists($enrollment, 'createIndividualEnrollments')) {
                     $enrollment->createIndividualEnrollments();
                 }
@@ -1213,6 +1211,14 @@ class PaymentSettlementService
         $paidTime = $childInvoice->paid_at ? Carbon::parse($childInvoice->paid_at)->format('d M Y H:i') : Carbon::now('Asia/Jakarta')->format('d M Y H:i');
         $message .= "📅 Dibayar: {$paidTime} WIB\n\n";
 
+        $productAccessUrl = match ($itemType) {
+            'course' => !empty($typeInfo['item']?->slug) ? route('profile.course.detail', ['course' => $typeInfo['item']->slug]) : $profileUrl,
+            'bootcamp' => !empty($typeInfo['item']?->slug) ? route('profile.bootcamp.detail', ['bootcamp' => $typeInfo['item']->slug]) : $profileUrl,
+            'webinar' => !empty($typeInfo['item']?->slug) ? route('profile.webinar.detail', ['webinar' => $typeInfo['item']->slug]) : $profileUrl,
+            'certification_program' => !empty($typeInfo['item']?->slug) ? route('profile.certification-program.detail', ['program' => $typeInfo['item']->slug]) : $profileUrl,
+            default => $profileUrl,
+        };
+
         if (!$isCompleted && $nextTerm) {
             $nextTermNumber = $nextTerm->installment_number;
             $nextDue = $nextTerm->installment_due_date ? Carbon::parse($nextTerm->installment_due_date)->translatedFormat('d F Y') : '-';
@@ -1224,7 +1230,8 @@ class PaymentSettlementService
         } elseif ($isCompleted) {
             $message .= "*Status Cicilan:*\n";
             $message .= "🎉 Status: *LUNAS (Semua {$totalTerms} termin selesai)*\n";
-            $message .= "🏆 Sertifikat program dapat diakses melalui profil Anda setelah menyelesaikan pembelajaran.\n\n";
+            $message .= "🏆 Akses & Unduh Sertifikat: {$productAccessUrl}\n";
+            $message .= "📚 Akses Materi Program: {$productAccessUrl}\n\n";
         }
 
         $message .= "*Cara Mengakses Materi:*\n";

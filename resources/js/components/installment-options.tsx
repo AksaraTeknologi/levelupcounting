@@ -60,6 +60,7 @@ interface InstallmentOptionsProps {
     termsAccepted?: boolean;
     onTermsAcceptedChange?: (accepted: boolean) => void;
     onBeforePay?: () => Promise<boolean> | boolean;
+    requireAuthForGuest?: boolean;
 }
 
 export default function InstallmentOptions({
@@ -70,11 +71,12 @@ export default function InstallmentOptions({
     termsAccepted,
     onTermsAcceptedChange,
     onBeforePay,
+    requireAuthForGuest = false,
 }: InstallmentOptionsProps) {
     const { t, i18n } = useTranslation('common');
     const { auth } = usePage<SharedData>().props;
     const isLoggedIn = !!auth?.user;
-    const isGuestBlocked = !isLoggedIn && !onBeforePay;
+    const isGuestBlocked = !isLoggedIn && (requireAuthForGuest || !onBeforePay);
     const isCourse = productType === 'course';
     const dateLocale = i18n.language === 'en' ? enUS : id;
     const [isLoading, setIsLoading] = useState(false);

@@ -213,9 +213,11 @@ class MidtransCallbackController extends Controller
 
         if ($parentInvoice->courseItems && $parentInvoice->courseItems->count() > 0) {
             foreach ($parentInvoice->courseItems as $item) {
-                $item->update([
-                    'completed_at' => Carbon::now('Asia/Jakarta')
-                ]);
+                if ((int) $item->progress >= 100 && !$item->completed_at) {
+                    $item->update([
+                        'completed_at' => Carbon::now('Asia/Jakarta')
+                    ]);
+                }
             }
         }
 
@@ -245,10 +247,6 @@ class MidtransCallbackController extends Controller
 
         if ($parentInvoice->bundleEnrollments && $parentInvoice->bundleEnrollments->count() > 0) {
             foreach ($parentInvoice->bundleEnrollments as $bundleEnrollment) {
-                $bundleEnrollment->update([
-                    'completed_at' => Carbon::now('Asia/Jakarta')
-                ]);
-
                 if (method_exists($bundleEnrollment, 'createIndividualEnrollments')) {
                     $bundleEnrollment->createIndividualEnrollments();
                 }
@@ -392,6 +390,14 @@ class MidtransCallbackController extends Controller
         $paidTime = $childInvoice->paid_at ? Carbon::parse($childInvoice->paid_at)->format('d M Y H:i') : Carbon::now('Asia/Jakarta')->format('d M Y H:i');
         $message .= "📅 Dibayar: {$paidTime} WIB\n\n";
 
+        $productAccessUrl = match ($itemType) {
+            'course' => !empty($typeInfo['item']?->slug) ? route('profile.course.detail', ['course' => $typeInfo['item']->slug]) : $profileUrl,
+            'bootcamp' => !empty($typeInfo['item']?->slug) ? route('profile.bootcamp.detail', ['bootcamp' => $typeInfo['item']->slug]) : $profileUrl,
+            'webinar' => !empty($typeInfo['item']?->slug) ? route('profile.webinar.detail', ['webinar' => $typeInfo['item']->slug]) : $profileUrl,
+            'certification_program' => !empty($typeInfo['item']?->slug) ? route('profile.certification-program.detail', ['program' => $typeInfo['item']->slug]) : $profileUrl,
+            default => $profileUrl,
+        };
+
         // 3. Info Termin Selanjutnya & Link Pelunasan
         if (!$isCompleted && $nextTerm) {
             $nextTermNumber = $nextTerm->installment_number;
@@ -408,7 +414,8 @@ class MidtransCallbackController extends Controller
         } elseif ($isCompleted) {
             $message .= "*Status Cicilan:*\n";
             $message .= "🎉 Status: *LUNAS (Semua {$totalTerms} termin selesai)*\n";
-            $message .= "🏆 Sertifikat program dapat diakses melalui profil Anda setelah menyelesaikan pembelajaran.\n\n";
+            $message .= "🏆 Akses & Unduh Sertifikat: {$productAccessUrl}\n";
+            $message .= "📚 Akses Materi Program: {$productAccessUrl}\n\n";
         }
 
         // 4. Cara Mengakses Materi
