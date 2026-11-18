@@ -25,6 +25,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withSchedule(function (\Illuminate\Console\Scheduling\Schedule $schedule) {
         $schedule->command('installment:check-overdue')->dailyAt('08:00')->timezone('Asia/Jakarta');
+        // Sebelum laporan Cava 06:00: putus hubungan batch ke kelas brevetlearning yang sudah dihapus.
+        $schedule->command('brevetlearning:prune-links')->dailyAt('05:30')->timezone('Asia/Jakarta');
         $schedule->command('invoices:expire-old')->hourly();
     })
     ->withMiddleware(function (Middleware $middleware) {
