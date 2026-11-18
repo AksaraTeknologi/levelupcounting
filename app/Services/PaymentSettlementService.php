@@ -10,7 +10,7 @@ use App\Models\CertificateParticipant;
 use App\Models\CertificationProgramApplication;
 use App\Models\Invoice;
 use App\Models\User;
-use App\Traits\MessaraTrait;
+use App\Traits\WhatsAppTrait;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Mail;
 
 class PaymentSettlementService
 {
-    use MessaraTrait;
+    use WhatsAppTrait;
 
     /**
      * Settle an invoice payment atomically and idempotently.

@@ -16,7 +16,7 @@ use App\Models\ProductInstallmentTerm;
 use App\Models\Webinar;
 use App\Services\MidtransService;
 use App\Services\TripayService;
-use App\Traits\MessaraTrait;
+use App\Traits\WhatsAppTrait;
 use Carbon\Carbon;
 use Haruncpi\LaravelIdGenerator\IdGenerator;
 use Illuminate\Http\Request;
@@ -28,7 +28,7 @@ use Inertia\Inertia;
 
 class InstallmentController extends Controller
 {
-    use MessaraTrait;
+    use WhatsAppTrait;
 
     protected $midtransService;
     protected $tripayService;

@@ -25,7 +25,7 @@ use App\Models\Webinar;
 use App\Services\TripayService;
 use App\Services\Payment\PaymentGatewayManager;
 use App\Services\InvoiceFulfillmentService;
-use App\Traits\MessaraTrait;
+use App\Traits\WhatsAppTrait;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -48,7 +48,7 @@ use Maatwebsite\Excel\Facades\Excel;
 
 class InvoiceController extends Controller
 {
-    use MessaraTrait;
+    use WhatsAppTrait;
 
     protected $tripayService;
     protected $midtransService;
