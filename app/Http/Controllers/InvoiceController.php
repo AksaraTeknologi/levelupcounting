@@ -4077,7 +4077,8 @@ class InvoiceController extends Controller
             'bundle_id',
             'certification_program_id',
             'title',
-            'user_name'
+            'user_name',
+            'search'
         ]);
         $filename = 'Laporan_Transaksi_Levelupcounting';
 
